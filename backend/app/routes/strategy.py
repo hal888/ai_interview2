@@ -1,0 +1,462 @@
+from flask import Blueprint, request, jsonify
+import json
+from ..services.deepseek_service import client
+from ..services.file_service import get_resume_content
+from ..models import db, User, InterviewStrategy
+
+# 创建蓝图
+bp = Blueprint('strategy', __name__, url_prefix='/api/strategy')
+
+@bp.route('/analysis', methods=['POST'])
+def analysis():
+    """生成画像分析API"""
+    data = request.get_json()
+    background_info = data.get('backgroundInfo', '')
+    directions = data.get('directions', [])
+    user_id = data.get('userId', 'default_user')
+    
+    # 根据userId获取最新的resumeId
+    resume_id = '1'  # 默认值
+    try:
+        user = User.query.filter_by(user_id=user_id).first()
+        if user:
+            # 获取用户最新的简历
+            from app.models import Resume
+            latest_resume = Resume.query.filter_by(user_id=user.id).order_by(Resume.updated_at.desc()).first()
+            if latest_resume:
+                resume_id = latest_resume.resume_id
+                print(f"[API LOG] 使用用户最新的简历ID: {resume_id}")
+    except Exception as e:
+        print(f"获取用户最新简历失败: {e}")
+    
+    # 打印请求参数
+    print(f"[API LOG] /api/strategy/analysis - Request received: backgroundInfo={background_info[:50]}..., directions={directions}, resumeId={resume_id}, userId={user_id}")
+    
+    # 获取简历内容
+    resume_content = get_resume_content(resume_id, 'optimized')
+    
+    # 构建prompt生成画像分析（使用字符串连接避免格式说明符问题）
+    prompt = "你是一位专业的面试策略分析师，正在为候选人生成面试策略。请基于以下信息：\n\n1. 简历内容：" + resume_content + "\n2. 用户背景信息：" + background_info + "\n3. 优化方向：" + str(directions) + "\n\n请生成一份详细的画像分析报告，要求：\n\n1. 报告结构清晰，包含多个章节\n2. 每个章节包含：标题、内容描述和实用建议\n3. 针对用户的优化方向提供具体的策略建议\n4. 语言通俗易懂，具有可操作性\n\n输出格式要求：\n{\"sections\": [{\"title\": \"章节标题\", \"content\": \"章节内容\", \"tips\": [\"建议1\", \"建议2\"]}]}\n\n只输出JSON格式，不要包含任何额外的文字或解释。"
+    
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": "你是一位专业的面试策略分析师，擅长为候选人提供个性化的面试策略建议"},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=8124
+        )
+        
+        # 解析API返回结果
+        api_result = response.choices[0].message.content
+        
+        try:
+            # 清理可能的额外内容，只保留JSON部分
+            start_idx = api_result.find('{')
+            end_idx = api_result.rfind('}') + 1
+            if start_idx == -1 or end_idx <= start_idx:
+                raise ValueError("未找到有效的JSON结构")
+            
+            json_content = api_result[start_idx:end_idx]
+            
+            # 清理无效控制字符
+            import re
+            # 移除所有控制字符，除了制表符、换行符和回车符
+            json_content = re.sub(r'[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]', '', json_content)
+            
+            # 清理可能的特殊字符和格式问题
+            # 移除多余的空格和换行符
+            json_content = re.sub(r'\s+', ' ', json_content)
+            # 确保冒号后有空格，逗号后有空格
+            json_content = re.sub(r':', ': ', json_content)
+            json_content = re.sub(r',', ', ', json_content)
+            # 清理JSON字符串中的中文引号
+            json_content = re.sub(r'[“”]', '"', json_content)
+            json_content = re.sub(r'[‘’]', "'", json_content)
+            # 移除JSON字符串前后的空格
+            json_content = json_content.strip()
+            
+            # 尝试解析JSON
+            result = json.loads(json_content)
+        except json.JSONDecodeError as e:
+            print(f"JSON解析错误: {e}")
+            print(f"JSON内容片段（错误位置附近）: {json_content[max(0, 3220-20):3220+20]}")
+            # 使用默认分析结果作为备选
+            result = {
+                "sections": [
+                    {
+                        "title": "职业背景分析",
+                        "content": "根据您提供的信息，您具有良好的职业背景和相关经验，适合目标岗位的要求。",
+                        "tips": [
+                            "在面试中突出您的核心技能和项目经验",
+                            "使用具体数据和案例来支撑您的能力",
+                            "重点展示与目标岗位相关的工作经历"
+                        ]
+                    },
+                    {
+                        "title": "面试策略建议",
+                        "content": "基于您的背景和目标岗位，建议您采用以下面试策略。",
+                        "tips": [
+                            "提前了解目标公司的业务和文化",
+                            "准备3-5个典型的项目案例，使用STAR法则进行描述",
+                            "针对常见问题提前准备回答框架"
+                        ]
+                    }
+                ]
+            }
+        except Exception as e:
+            print(f"处理API结果时出错: {e}")
+            # 使用默认分析结果作为备选
+            result = {
+                "sections": [
+                    {
+                        "title": "职业背景分析",
+                        "content": "根据您提供的信息，您具有良好的职业背景和相关经验，适合目标岗位的要求。",
+                        "tips": [
+                            "在面试中突出您的核心技能和项目经验",
+                            "使用具体数据和案例来支撑您的能力",
+                            "重点展示与目标岗位相关的工作经历"
+                        ]
+                    },
+                    {
+                        "title": "面试策略建议",
+                        "content": "基于您的背景和目标岗位，建议您采用以下面试策略。",
+                        "tips": [
+                            "提前了解目标公司的业务和文化",
+                            "准备3-5个典型的项目案例，使用STAR法则进行描述",
+                            "针对常见问题提前准备回答框架"
+                        ]
+                    }
+                ]
+            }
+        
+        # 保存到数据库
+        try:
+            # 获取或创建用户
+            user = User.query.filter_by(user_id=user_id).first()
+            if not user:
+                user = User(user_id=user_id)
+                db.session.add(user)
+                db.session.commit()
+            
+            # 创建InterviewStrategy记录
+            strategy = InterviewStrategy(
+                user_id=user.id,
+                resume_id=resume_id,
+                type='analysis',
+                background_info=background_info,
+                directions=json.dumps(directions),
+                result=json.dumps(result)
+            )
+            db.session.add(strategy)
+            db.session.commit()
+        except Exception as db_error:
+            print(f"保存面试策略分析到数据库失败: {db_error}")
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print(f"生成画像分析失败: {e}")
+        # 使用默认分析结果作为备选
+        result = {
+            "sections": [
+                {
+                    "title": "职业背景分析",
+                    "content": "根据您提供的信息，您具有良好的职业背景和相关经验，适合目标岗位的要求。",
+                    "tips": [
+                        "在面试中突出您的核心技能和项目经验",
+                        "使用具体数据和案例来支撑您的能力",
+                        "重点展示与目标岗位相关的工作经历"
+                    ]
+                },
+                {
+                    "title": "面试策略建议",
+                    "content": "基于您的背景和目标岗位，建议您采用以下面试策略。",
+                    "tips": [
+                        "提前了解目标公司的业务和文化",
+                        "准备3-5个典型的项目案例，使用STAR法则进行描述",
+                        "针对常见问题提前准备回答框架"
+                    ]
+                }
+            ]
+        }
+        
+        return jsonify(result), 200
+
+@bp.route('/analysis/history', methods=['GET'])
+def get_analysis_history():
+    """获取用户的策略分析历史记录API"""
+    user_id = request.args.get('userId', 'default_user')
+    
+    # 打印请求参数
+    print(f"[API LOG] /api/strategy/analysis/history - Request received: userId={user_id}")
+    
+    if not user_id:
+        return jsonify({"error": "Missing userId"}), 400
+    
+    try:
+        # 获取用户
+        user = User.query.filter_by(user_id=user_id).first()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        # 获取用户的所有策略分析记录
+        strategies = InterviewStrategy.query.filter_by(user_id=user.id, type='analysis').order_by(InterviewStrategy.created_at.desc()).all()
+        
+        # 转换为前端需要的格式
+        history = []
+        for strategy in strategies:
+            history.append({
+                "id": strategy.id,
+                "resume_id": strategy.resume_id,
+                "background_info": strategy.background_info,
+                "directions": json.loads(strategy.directions) if strategy.directions else [],
+                "created_at": strategy.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "result": json.loads(strategy.result) if strategy.result else {}
+            })
+        
+        return jsonify(history), 200
+    except Exception as e:
+        print(f"获取策略分析历史失败: {e}")
+        return jsonify({"error": "Failed to get analysis history"}), 500
+
+@bp.route('/questions', methods=['POST'])
+def questions():
+    """生成反问环节问题API"""
+    data = request.get_json()
+    company_name = data.get('companyName', '')
+    position = data.get('position', '')
+    question_types = data.get('questionTypes', [])
+    user_id = data.get('userId', 'default_user')
+    
+    # 根据userId获取最新的resumeId
+    resume_id = '1'  # 默认值
+    try:
+        user = User.query.filter_by(user_id=user_id).first()
+        if user:
+            # 获取用户最新的简历
+            from app.models import Resume
+            latest_resume = Resume.query.filter_by(user_id=user.id).order_by(Resume.updated_at.desc()).first()
+            if latest_resume:
+                resume_id = latest_resume.resume_id
+                print(f"[API LOG] 使用用户最新的简历ID: {resume_id}")
+    except Exception as e:
+        print(f"获取用户最新简历失败: {e}")
+    
+    # 打印请求参数
+    print(f"[API LOG] /api/strategy/questions - Request received: companyName={company_name}, position={position}, questionTypes={question_types}, resumeId={resume_id}, userId={user_id}")
+    
+    # 获取简历内容
+    resume_content = get_resume_content(resume_id, 'optimized')
+    
+    # 构建prompt生成反问问题（使用字符串连接避免格式说明符问题）
+    prompt = "你是一位专业的面试策略顾问，正在为候选人生成高质量的反问问题。请基于以下信息：\n\n1. 简历内容：" + resume_content + "\n2. 目标公司：" + company_name + "\n3. 目标岗位：" + position + "\n4. 问题类型：" + str(question_types) + "\n\n请生成5-8个高质量的反问问题，要求：\n\n1. 问题要有深度，能体现候选人对公司和岗位的了解\n2. 问题类型多样，涵盖公司发展、团队文化、岗位发展、工作内容等\n3. 每个问题要包含提问意图，说明为什么要问这个问题\n4. 问题要适合在面试的反问环节提出\n\n输出格式要求：\n{\"questions\": [{\"content\": \"问题内容\", \"type\": \"问题类型\", \"explanation\": \"提问意图\"}]}\n\n只输出JSON格式，不要包含任何额外的文字或解释。"
+    
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": "你是一位专业的面试策略顾问，擅长为候选人生成高质量的反问问题"},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=8124
+        )
+        
+        # 解析API返回结果
+        api_result = response.choices[0].message.content
+        
+        try:
+            # 清理可能的额外内容，只保留JSON部分
+            start_idx = api_result.find('{')
+            end_idx = api_result.rfind('}') + 1
+            if start_idx == -1 or end_idx <= start_idx:
+                raise ValueError("未找到有效的JSON结构")
+            
+            json_content = api_result[start_idx:end_idx]
+            
+            # 清理无效控制字符
+            import re
+            # 移除所有控制字符，除了制表符、换行符和回车符
+            json_content = re.sub(r'[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]', '', json_content)
+            
+            # 清理可能的特殊字符和格式问题
+            # 移除多余的空格和换行符
+            json_content = re.sub(r'\s+', ' ', json_content)
+            # 确保冒号后有空格，逗号后有空格
+            json_content = re.sub(r':', ': ', json_content)
+            json_content = re.sub(r',', ', ', json_content)
+            # 清理JSON字符串中的中文引号
+            json_content = re.sub(r'[“”]', '"', json_content)
+            json_content = re.sub(r'[‘’]', "'", json_content)
+            # 移除JSON字符串前后的空格
+            json_content = json_content.strip()
+            
+            # 尝试解析JSON
+            result = json.loads(json_content)
+        except json.JSONDecodeError as e:
+            print(f"JSON解析错误: {e}")
+            print(f"JSON内容片段（错误位置附近）: {json_content[max(0, 3220-20):3220+20] if len(json_content) > 3220 else json_content}")
+            # 使用默认问题作为备选
+            result = {
+                "questions": [
+                    {
+                        "content": "请问贵公司对这个岗位的核心考核指标是什么？",
+                        "type": "岗位发展类",
+                        "explanation": "了解岗位的考核指标，能够更好地理解公司对这个岗位的期望，也能判断自己是否适合这个岗位。"
+                    },
+                    {
+                        "content": "请问这个团队目前的人员构成和分工是怎样的？",
+                        "type": "团队文化类",
+                        "explanation": "了解团队的人员构成和分工，能够更好地理解自己在团队中的定位和合作方式。"
+                    },
+                    {
+                        "content": "请问贵公司的技术栈和未来的技术发展方向是什么？",
+                        "type": "工作内容类",
+                        "explanation": "了解公司的技术栈和发展方向，能够判断自己的技术能力是否匹配，也能了解未来的学习和发展机会。"
+                    },
+                    {
+                        "content": "请问贵公司对新员工的培训和晋升机制是怎样的？",
+                        "type": "岗位发展类",
+                        "explanation": "了解公司的培训和晋升机制，能够判断自己在公司的成长空间和发展路径。"
+                    },
+                    {
+                        "content": "请问贵公司的企业文化和价值观是什么？",
+                        "type": "团队文化类",
+                        "explanation": "了解公司的企业文化和价值观，能够判断自己是否认同公司的理念，是否能融入公司的文化氛围。"
+                    }
+                ]
+            }
+        except Exception as e:
+            print(f"处理API结果时出错: {e}")
+            # 使用默认问题作为备选
+            result = {
+                "questions": [
+                    {
+                        "content": "请问贵公司对这个岗位的核心考核指标是什么？",
+                        "type": "岗位发展类",
+                        "explanation": "了解岗位的考核指标，能够更好地理解公司对这个岗位的期望，也能判断自己是否适合这个岗位。"
+                    },
+                    {
+                        "content": "请问这个团队目前的人员构成和分工是怎样的？",
+                        "type": "团队文化类",
+                        "explanation": "了解团队的人员构成和分工，能够更好地理解自己在团队中的定位和合作方式。"
+                    },
+                    {
+                        "content": "请问贵公司的技术栈和未来的技术发展方向是什么？",
+                        "type": "工作内容类",
+                        "explanation": "了解公司的技术栈和发展方向，能够判断自己的技术能力是否匹配，也能了解未来的学习和发展机会。"
+                    },
+                    {
+                        "content": "请问贵公司对新员工的培训和晋升机制是怎样的？",
+                        "type": "岗位发展类",
+                        "explanation": "了解公司的培训和晋升机制，能够判断自己在公司的成长空间和发展路径。"
+                    },
+                    {
+                        "content": "请问贵公司的企业文化和价值观是什么？",
+                        "type": "团队文化类",
+                        "explanation": "了解公司的企业文化和价值观，能够判断自己是否认同公司的理念，是否能融入公司的文化氛围。"
+                    }
+                ]
+            }
+        
+        # 保存到数据库
+        try:
+            # 获取或创建用户
+            user = User.query.filter_by(user_id=user_id).first()
+            if not user:
+                user = User(user_id=user_id)
+                db.session.add(user)
+                db.session.commit()
+            
+            # 创建InterviewStrategy记录
+            strategy = InterviewStrategy(
+                user_id=user.id,
+                resume_id=resume_id,
+                type='questions',
+                company_name=company_name,
+                position=position,
+                question_types=json.dumps(question_types),
+                result=json.dumps(result)
+            )
+            db.session.add(strategy)
+            db.session.commit()
+        except Exception as db_error:
+            print(f"保存反问问题到数据库失败: {db_error}")
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print(f"生成反问问题失败: {e}")
+        # 使用默认问题作为备选
+        result = {
+            "questions": [
+                {
+                    "content": "请问贵公司对这个岗位的核心考核指标是什么？",
+                    "type": "岗位发展类",
+                    "explanation": "了解岗位的考核指标，能够更好地理解公司对这个岗位的期望，也能判断自己是否适合这个岗位。"
+                },
+                {
+                    "content": "请问这个团队目前的人员构成和分工是怎样的？",
+                    "type": "团队文化类",
+                    "explanation": "了解团队的人员构成和分工，能够更好地理解自己在团队中的定位和合作方式。"
+                },
+                {
+                    "content": "请问贵公司的技术栈和未来的技术发展方向是什么？",
+                    "type": "工作内容类",
+                    "explanation": "了解公司的技术栈和发展方向，能够判断自己的技术能力是否匹配，也能了解未来的学习和发展机会。"
+                },
+                {
+                    "content": "请问贵公司对新员工的培训和晋升机制是怎样的？",
+                    "type": "岗位发展类",
+                    "explanation": "了解公司的培训和晋升机制，能够判断自己在公司的成长空间和发展路径。"
+                },
+                {
+                    "content": "请问贵公司的企业文化和价值观是什么？",
+                    "type": "团队文化类",
+                    "explanation": "了解公司的企业文化和价值观，能够判断自己是否认同公司的理念，是否能融入公司的文化氛围。"
+                }
+            ]
+        }
+        
+        return jsonify(result), 200
+
+@bp.route('/questions/history', methods=['GET'])
+def get_questions_history():
+    """获取用户的反问问题历史记录API"""
+    user_id = request.args.get('userId', 'default_user')
+    
+    # 打印请求参数
+    print(f"[API LOG] /api/strategy/questions/history - Request received: userId={user_id}")
+    
+    if not user_id:
+        return jsonify({"error": "Missing userId"}), 400
+    
+    try:
+        # 获取用户
+        user = User.query.filter_by(user_id=user_id).first()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        # 获取用户的所有反问问题记录
+        strategies = InterviewStrategy.query.filter_by(user_id=user.id, type='questions').order_by(InterviewStrategy.created_at.desc()).all()
+        
+        # 转换为前端需要的格式
+        history = []
+        for strategy in strategies:
+            history.append({
+                "id": strategy.id,
+                "resume_id": strategy.resume_id,
+                "company_name": strategy.company_name,
+                "position": strategy.position,
+                "question_types": json.loads(strategy.question_types) if strategy.question_types else [],
+                "created_at": strategy.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "result": json.loads(strategy.result) if strategy.result else {}
+            })
+        
+        return jsonify(history), 200
+    except Exception as e:
+        print(f"获取反问问题历史失败: {e}")
+        return jsonify({"error": "Failed to get questions history"}), 500
