@@ -326,13 +326,131 @@ def end():
         
         return jsonify(report), 200
 
+@bp.route('/voice-answer', methods=['POST'])
+def voice_answer():
+    """语音回答API，处理用户语音输入"""
+    try:
+        # 获取请求数据
+        interview_id = request.form.get('interviewId')
+        question_id = request.form.get('questionId')
+        audio_file = request.files.get('audio')
+        
+        # 打印请求参数
+        print(f"[API LOG] /api/mock-interview/voice-answer - Request received: interviewId={interview_id}, questionId={question_id}")
+        
+        # 检查会话是否存在
+        if interview_id not in interview_sessions:
+            return jsonify({"error": "面试会话不存在"}), 404
+        
+        # 保存音频文件到临时目录
+        import os
+        import tempfile
+        from datetime import datetime
+        
+        # 创建临时目录
+        temp_dir = os.path.join(os.getcwd(), 'temp_audio')
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
+        
+        # 生成唯一的文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        audio_path = os.path.join(temp_dir, f'{interview_id}_{timestamp}.webm')
+        audio_file.save(audio_path)
+        
+        # 语音识别处理
+        transcribed_text = transcribe_audio(audio_path)
+        
+        # 删除临时文件
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
+        
+        # 使用现有的answer处理逻辑
+        session = interview_sessions[interview_id]
+        
+        # 保存当前问题和回答
+        current_question = session["conversation_history"][-1] if session["conversation_history"] else "请介绍一下你自己"
+        session["question_answers"].append({
+            "question_id": question_id,
+            "question": current_question,
+            "answer": transcribed_text
+        })
+        
+        # 构建prompt生成反馈和下一个问题（使用字符串连接避免格式说明符问题）
+        prompt = "你是一位" + session['style'] + "风格的面试官，正在为候选人进行面试。请基于以下信息：\n\n1. 简历内容：" + session['resume_content'] + "\n2. 对话历史：" + str(session['conversation_history']) + "\n3. 当前问题：" + current_question + "\n4. 候选人回答：" + transcribed_text + "\n\n请完成以下任务：\n\n1. 生成对当前回答的反馈，要求：\n   - 评价回答的质量、逻辑、深度\n   - 指出优点和不足\n   - 语言风格符合" + session['style'] + "\n\n2. 生成下一个面试问题，要求：\n   - 问题类型多样（简历深挖题、专业技能题、行为/情景题等）\n   - 与候选人的简历和对话历史相关\n   - 难度适中，符合面试流程\n\n输出格式要求：\n{\"feedback\": \"对当前回答的反馈\", \"nextQuestion\": {\"id\": 数字id, \"content\": \"下一个问题内容\", \"type\": \"问题类型\"}}\n\n只输出JSON格式，不要包含任何额外的文字或解释。"
+        
+        try:
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {"role": "system", "content": "你是一位" + session['style'] + "风格的专业面试官"},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1024
+            )
+            
+            # 解析API返回结果
+            api_result = response.choices[0].message.content
+            
+            # 清理可能的额外内容，只保留JSON部分
+            start_idx = api_result.find('{')
+            end_idx = api_result.rfind('}') + 1
+            if start_idx == -1 or end_idx <= start_idx:
+                # 如果解析失败，使用默认反馈和问题
+                result = {
+                    "transcribedText": transcribed_text,
+                    "feedback": "您的回答结构清晰，重点突出，但可以更具体地描述项目成果。",
+                    "nextQuestion": {
+                        "id": session["current_question_id"] + 1,
+                        "content": "您为什么想来我们公司工作？",
+                        "type": "高频必问题"
+                    }
+                }
+            else:
+                json_content = api_result[start_idx:end_idx]
+                result = json.loads(json_content)
+                result["nextQuestion"]["id"] = session["current_question_id"] + 1
+                result["transcribedText"] = transcribed_text
+            
+            # 更新会话信息
+            session["current_question_id"] += 1
+            session["conversation_history"].append(result["nextQuestion"]["content"])
+            
+            return jsonify(result), 200
+            
+        except Exception as e:
+            print(f"生成反馈和下一个问题失败: {e}")
+            # 使用默认反馈和问题作为备选
+            result = {
+                "transcribedText": transcribed_text,
+                "feedback": "您的回答结构清晰，重点突出，但可以更具体地描述项目成果。",
+                "nextQuestion": {
+                    "id": session["current_question_id"] + 1,
+                    "content": "您为什么想来我们公司工作？",
+                    "type": "高频必问题"
+                }
+            }
+            
+            # 更新会话信息
+            session["current_question_id"] += 1
+            session["conversation_history"].append(result["nextQuestion"]["content"])
+            
+            return jsonify(result), 200
+            
+    except Exception as e:
+        print(f"语音回答处理失败: {e}")
+        return jsonify({"error": "语音回答处理失败"}), 500
+
 @bp.route('/history', methods=['GET'])
 def get_history():
     """获取用户的模拟面试历史记录API"""
     user_id = request.args.get('userId', 'default_user')
+    style = request.args.get('style')
+    mode = request.args.get('mode')
+    duration = request.args.get('duration')
     
     # 打印请求参数
-    print(f"[API LOG] /api/mock-interview/history - Request received: userId={user_id}")
+    print(f"[API LOG] /api/mock-interview/history - Request received: userId={user_id}, style={style}, mode={mode}, duration={duration}")
     
     if not user_id:
         return jsonify({"error": "Missing userId"}), 400
@@ -343,23 +461,108 @@ def get_history():
         if not user:
             return jsonify({"error": "User not found"}), 404
         
-        # 获取用户的所有模拟面试记录
-        mock_interviews = MockInterview.query.filter_by(user_id=user.id).order_by(MockInterview.created_at.desc()).all()
+        # 构建查询
+        query = MockInterview.query.filter_by(user_id=user.id)
+        
+        # 添加条件过滤
+        if style:
+            query = query.filter_by(style=style)
+        if mode:
+            query = query.filter_by(mode=mode)
+        if duration:
+            try:
+                duration = int(duration)
+                query = query.filter_by(duration=duration)
+            except ValueError:
+                print(f"Invalid duration: {duration}, ignoring")
+        
+        # 获取最新的一条记录
+        mock_interview = query.order_by(MockInterview.created_at.desc()).first()
         
         # 转换为前端需要的格式
         history = []
-        for interview in mock_interviews:
+        if mock_interview:
             history.append({
-                "id": interview.id,
-                "style": interview.style,
-                "mode": interview.mode,
-                "duration": interview.duration,
-                "resume_id": interview.resume_id,
-                "created_at": interview.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                "report": json.loads(interview.report) if interview.report else {}
+                "id": mock_interview.id,
+                "style": mock_interview.style,
+                "mode": mock_interview.mode,
+                "duration": mock_interview.duration,
+                "resume_id": mock_interview.resume_id,
+                "created_at": mock_interview.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "reportData": json.loads(mock_interview.report) if mock_interview.report else {}
             })
         
+        print(f"[API LOG] /api/mock-interview/history - Response: {history}")
         return jsonify(history), 200
     except Exception as e:
         print(f"获取模拟面试历史失败: {e}")
         return jsonify({"error": "Failed to get mock interview history"}), 500
+
+@bp.route('/save-report', methods=['POST'])
+def save_report():
+    """保存模拟面试报告API"""
+    try:
+        # 获取请求数据
+        data = request.get_json()
+        user_id = data.get('userId')
+        interview_id = data.get('interviewId')
+        report_data = data.get('reportData')
+        style = data.get('style')
+        mode = data.get('mode')
+        duration = data.get('duration')
+        resume_id = data.get('resumeId', 'default_resume')
+        
+        # 打印请求参数
+        print(f"[API LOG] /api/mock-interview/save-report - Request received: userId={user_id}, interviewId={interview_id}, style={style}, mode={mode}, duration={duration}")
+        
+        if not user_id or not report_data:
+            return jsonify({"error": "Missing required parameters"}), 400
+        
+        # 获取或创建用户
+        user = User.query.filter_by(user_id=user_id).first()
+        if not user:
+            user = User(user_id=user_id)
+            db.session.add(user)
+            db.session.commit()
+        
+        # 创建MockInterview记录
+        mock_interview = MockInterview(
+            user_id=user.id,
+            resume_id=resume_id,
+            style=style,
+            mode=mode,
+            duration=duration,
+            report=json.dumps(report_data)
+        )
+        db.session.add(mock_interview)
+        db.session.commit()
+        
+        return jsonify({"success": True, "message": "Report saved successfully", "id": mock_interview.id}), 200
+    except Exception as e:
+        print(f"保存模拟面试报告失败: {e}")
+        return jsonify({"error": "Failed to save mock interview report"}), 500
+
+# 语音识别函数
+def transcribe_audio(audio_path):
+    """将音频文件转换为文本"""
+    try:
+        # 这里使用OpenAI Whisper API进行语音识别
+        # 实际部署时需要替换为真实的API调用或本地模型
+        import openai
+        import os
+        
+        # 检查是否设置了API密钥
+        if not os.environ.get('OPENAI_API_KEY'):
+            # 如果没有API密钥，返回模拟结果
+            print("未设置OPENAI_API_KEY，使用模拟语音识别结果")
+            return "这是一个模拟的语音识别结果。在实际环境中，这里会调用真实的语音识别API，如OpenAI Whisper，将音频文件转换为准确的文本内容。"
+        
+        # 使用OpenAI Whisper API
+        with open(audio_path, "rb") as audio_file:
+            transcript = openai.Audio.transcribe("whisper-1", audio_file, language="zh")
+        
+        return transcript["text"]
+    except Exception as e:
+        print(f"语音识别失败: {e}")
+        # 返回模拟结果
+        return "这是一个模拟的语音识别结果。在实际环境中，这里会调用真实的语音识别API，如OpenAI Whisper，将音频文件转换为准确的文本内容。"

@@ -21,8 +21,8 @@ def parse_resume_result(content):
     }
     
     # content内容写入文件
-    with open('response.txt', 'w', encoding='utf-8') as f:
-        f.write(content)
+    # with open('response.txt', 'w', encoding='utf-8') as f:
+    #     f.write(content)
     
     print("=== 开始JSON解析 ===")
     print(f"原始响应长度：{len(content)}字符")

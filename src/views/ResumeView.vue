@@ -139,6 +139,9 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { jsPDF } from 'jspdf'
 import html2canvas from 'html2canvas'
+import { marked } from 'marked'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github.css' // 导入highlight.js的GitHub样式
 
 const resumeData = ref(null)
 const activeTab = ref('STAR法则重写')
@@ -156,7 +159,7 @@ onMounted(async () => {
     }
     
     // 调用后端API获取最新的简历数据
-    const response = await axios.post('http://127.0.0.1:5000/api/resume/get', {
+    const response = await axios.post('http://localhost:5000/api/resume/get', {
       userId: userId
     })
     
@@ -204,7 +207,7 @@ const uploadResume = (file) => {
   formData.append('userId', userId) // 添加userId到请求中
   
   // 调用后端API
-  axios.post('http://127.0.0.1:5000/api/resume/analyze', formData, {
+  axios.post('http://localhost:5000/api/resume/analyze', formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     }
@@ -242,25 +245,47 @@ const getKeywordType = (keyword) => {
   return techKeywords.includes(keyword) ? '技术关键词' : '软技能关键词'
 }
 
+// 配置marked库，使用highlight.js进行代码块语法高亮
+marked.setOptions({
+  highlight: function(code, lang) {
+    // 如果指定了语言且hljs支持该语言，则进行语法高亮
+    if (lang && hljs.getLanguage(lang)) {
+      try {
+        return hljs.highlight(code, { language: lang }).value
+      } catch (__) {}
+    }
+    // 否则返回原始代码，不进行高亮
+    return code
+  },
+  breaks: true, // 允许换行符转换为<br>
+  gfm: true, // 启用GitHub风格的Markdown
+  sanitize: true // 启用HTML sanitize，确保安全渲染
+})
+
 // 格式化简历内容
 const formattedResume = computed(() => {
   if (!resumeData.value?.optimizedResume) return ''
   
-  let resume = resumeData.value.optimizedResume
-  
-  // 替换Markdown标题为HTML标题
-  resume = resume.replace(/^# (.*$)/gm, '<h1 class="resume-section">$1</h1>')
-  resume = resume.replace(/^## (.*$)/gm, '<h2 class="resume-subsection">$1</h2>')
-  resume = resume.replace(/^### (.*$)/gm, '<h3 class="resume-item-title">$1</h3>')
-  
-  // 替换列表项
-  resume = resume.replace(/^- (.*$)/gm, '<li class="resume-list-item">$1</li>')
-  resume = resume.replace(/(<li class="resume-list-item">.*?)(<\/li>)/gs, '<ul class="resume-list">$1$2</ul>')
-  
-  // 替换段落
-  resume = resume.replace(/^(?!<h|<ul|<li).*$/gm, '<p class="resume-paragraph">$&</p>')
-  
-  return resume
+  try {
+    let resume = resumeData.value.optimizedResume
+    
+    // 处理个人信息部分，将|分隔符替换为换行符
+    // 匹配前几行的个人信息（通常前3-4行）
+    // resume = resume.replace(/^(.*?)$/gm, (match, line) => {
+      // 如果行中包含|分隔符且不是标题行，替换为换行
+    //   if (line.includes('|') && !line.startsWith('#') && !line.startsWith('##') && !line.startsWith('###')) {
+    //     // 保留每行的第一个分隔符，其余替换为换行
+    //     return line.replace(/\|/g, '\n')
+    //   }
+    //   return line
+    // })
+    
+    // 使用marked库解析Markdown为HTML
+    return marked(resume)
+  } catch (error) {
+    console.error('Markdown解析错误:', error)
+    return '<p>简历内容解析失败，请稍后重试</p>'
+  }
 })
 
 // 下载简历功能 - PDF格式
@@ -292,10 +317,24 @@ const downloadResume = async () => {
       format: 'a4'
     })
     
+    const pageHeight = 297 // A4高度，单位mm
+    let heightLeft = imgHeight
     let position = 0
     
-    // 添加图片到PDF
-    doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+    // 循环添加多页
+    while (heightLeft > 0) {
+      // 添加图片到当前页
+      doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      
+      // 更新剩余高度和位置
+      heightLeft -= pageHeight
+      position -= pageHeight
+      
+      // 如果还有剩余内容，添加新页
+      if (heightLeft > 0) {
+        doc.addPage()
+      }
+    }
     
     // 保存PDF文件
     doc.save('optimized_resume.pdf')
@@ -778,63 +817,344 @@ const downloadResume = async () => {
   border: 1px solid #e0e0e0;
   max-height: 500px;
   overflow-y: auto;
+  text-align: left;
 }
 
 /* 格式化简历样式 */
 .resume-preview {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 14px;
-  line-height: 1.8;
-  color: #333;
-  background-color: #fafafa;
-  padding: 30px;
-  border-radius: 5px;
-  min-height: 400px;
+  font-size: 15px !important; /* 增大字体，提升可读性 */
+  line-height: 2.0 !important; /* 增加行高，让文字更舒展 */
+  color: #2c3e50 !important; /* 调整文字颜色，更专业 */
+  background-color: #ffffff !important;
+  padding: 40px !important; /* 增加内边距，提升整体留白 */
+  border-radius: 8px !important;
+  min-height: 500px !important; /* 增加最小高度 */
+  text-align: left !important; /* 确保所有内容左对齐 */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important; /* 增加轻微阴影，提升层次感 */
+  display: block !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
-.resume-section {
-  font-size: 24px;
-  font-weight: bold;
-  color: #2c3e50;
-  margin: 20px 0 15px 0;
-  padding-bottom: 8px;
-  border-bottom: 2px solid #3498db;
-  text-align: left;
-}
-
-.resume-subsection {
-  font-size: 18px;
-  font-weight: bold;
-  color: #34495e;
-  margin: 18px 0 12px 0;
-  padding-left: 10px;
-  border-left: 4px solid #3498db;
-  text-align: left;
-}
-
+/* 直接应用样式到marked生成的HTML标签 */
+.resume-preview h1,
+.resume-preview h2,
+.resume-preview h3,
+.resume-preview h4,
+.resume-preview h5,
+.resume-preview h6,
+.resume-preview p,
+.resume-preview ul,
+.resume-preview ol,
+.resume-preview li,
+.resume-preview pre,
+.resume-preview code,
+.resume-preview blockquote,
+.resume-preview table,
+.resume-preview th,
+.resume-preview td,
+.resume-preview a,
+.resume-section,
+.resume-subsection,
 .resume-item-title {
-  font-size: 16px;
-  font-weight: bold;
-  color: #2c3e50;
-  margin: 15px 0 8px 0;
-  text-align: left;
+  text-align: left !important;
+  box-sizing: border-box !important;
 }
 
+/* 为不同级别标题设置不同的间距，标题前后空1行 */
+/* 直接选择所有可能的标题元素，确保样式应用到Markdown生成的标题 */
+:deep(.resume-preview h1),
+:deep(.resume-section){
+  margin: 20x 0 20px 0 !important; /* 标题前后空1行（假设每行20px） */
+  font-size: 28px !important;
+  font-weight: 700 !important;
+  color: #1a202c !important;
+  padding-bottom: 12px !important;
+  border-bottom: 3px solid #3498db !important;
+}
+
+:deep(.resume-preview h2),
+:deep(.resume-subsection) {
+  margin: 20x 0 20x 0 !important; /* 标题前后空1行 */
+  font-size: 22px !important;
+  font-weight: 600 !important;
+  color: #2d3748 !important;
+  padding-left: 15px !important;
+  border-left: 4px solid #3498db !important;
+}
+
+/* 三级标题样式 */
+:deep(.resume-preview h3),
+:deep(.resume-item-title) {
+  margin: 20px 0 20px 0 !important; /* 标题前后空1行 */
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: #4a5568 !important;
+  background-color: #f7fafc !important;
+  padding: 12px 16px !important;
+  border-radius: 6px !important;
+  border-left: 4px solid #3498db !important;
+}
+
+/* 四级标题样式 */
+:deep(.resume-preview h4) {
+  margin: 20px 0 20px 0 !important; /* 标题前后空1行 */
+  font-size: 16px !important;
+  color: #2d3748 !important;
+  font-weight: 600 !important;
+}
+
+/* 五级和六级标题样式 */
+:deep(.resume-preview h5),
+:deep(.resume-preview h6) {
+  margin: 20px 0 20px 0 !important; /* 标题前后空1行 */
+  font-weight: 600 !important;
+  color: #4a5568 !important;
+}
+
+/* 段落样式 */
+.resume-preview p,
 .resume-paragraph {
-  margin: 10px 0;
-  text-align: left;
-  line-height: 1.8;
+  margin: 20px 0 !important;
+  line-height: 2.0 !important;
+  color: #4a5568 !important;
+  font-size: 15px !important;
+  word-spacing: 8px !important;
 }
 
+/* 列表样式 */
+.resume-preview ul,
+.resume-preview ol,
 .resume-list {
-  margin: 10px 0 10px 20px;
-  padding-left: 20px;
+  margin: 15px 0 15px 25px !important;
+  padding-left: 25px !important;
 }
 
+.resume-preview li,
 .resume-list-item {
-  margin: 6px 0;
-  list-style-type: disc;
-  color: #34495e;
+  margin: 10px 0 !important;
+  list-style-type: disc !important;
+  color: #4a5568 !important;
+  line-height: 1.8 !important;
+}
+
+.resume-preview ol li {
+  list-style-type: decimal !important;
+}
+
+/* 列表标记样式优化 */
+.resume-preview ul li::marker {
+  color: #3498db !important;
+  font-weight: bold !important;
+}
+
+.resume-preview ol li::marker {
+  color: #3498db !important;
+  font-weight: bold !important;
+}
+
+
+
+/* 个人信息行特殊处理 */
+.resume-preview > p:first-child,
+.resume-preview > div:first-child > p:first-child {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: #1a202c !important;
+  margin-bottom: 15px !important;
+  line-height: 2.2 !important;
+  white-space: pre-line !important; /* 保留换行符 */
+}
+
+/* 个人联系方式行处理 */
+.resume-preview > p:nth-child(2),
+.resume-preview > p:nth-child(3),
+.resume-preview > div:first-child > p:nth-child(2),
+.resume-preview > div:first-child > p:nth-child(3) {
+  font-size: 15px !important;
+  color: #718096 !important;
+  margin-bottom: 15px !important;
+  line-height: 2.2 !important;
+  white-space: pre-line !important; /* 保留换行符 */
+  word-break: break-word !important; /* 长文本自动换行 */
+}
+
+/* 移除个人信息项样式，改为更简洁的展示 */
+.resume-preview > p:first-child span,
+.resume-preview > p:nth-child(2) span,
+.resume-preview > p:nth-child(3) span {
+  display: inline !important;
+  margin-right: 0 !important;
+  margin-bottom: 0 !important;
+  padding: 0 !important;
+  background-color: transparent !important;
+  border-radius: 0 !important;
+  border-left: none !important;
+}
+
+/* 日期样式 */
+.resume-preview h4 + p {
+  color: #718096 !important;
+  font-size: 14px !important;
+  margin-top: 0 !important;
+  margin-bottom: 12px !important;
+  font-style: italic !important;
+}
+
+/* 图片样式 */
+.resume-preview img {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block !important;
+  margin: 20px auto !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 分隔线样式 */
+.resume-preview hr {
+  border: none !important;
+  border-top: 2px solid #e2e8f0 !important;
+  margin: 30px 0 !important;
+  opacity: 0.7 !important;
+}
+
+/* 引用样式 */
+.resume-preview blockquote {
+  border-left: 4px solid #3498db !important;
+  padding: 15px 20px !important;
+  margin: 20px 0 !important;
+  color: #718096 !important;
+  font-style: italic !important;
+  background-color: #f7fafc !important;
+  border-radius: 0 6px 6px 0 !important;
+}
+
+/* 表格样式 */
+.resume-preview table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+  margin: 20px 0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.resume-preview th,
+.resume-preview td {
+  border: 1px solid #e2e8f0 !important;
+  padding: 12px 15px !important;
+  text-align: left !important;
+  font-size: 14px !important;
+}
+
+.resume-preview th {
+  background-color: #f7fafc !important;
+  font-weight: 600 !important;
+  color: #2d3748 !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+}
+
+.resume-preview tr:nth-child(even) {
+  background-color: #fafafa !important;
+}
+
+.resume-preview tr:hover {
+  background-color: #f7fafc !important;
+}
+
+/* 代码块样式 */
+.resume-preview pre {
+  background-color: #f7fafc !important;
+  padding: 20px !important;
+  border-radius: 8px !important;
+  overflow-x: auto !important;
+  margin: 20px 0 !important;
+  font-family: 'SF Mono', 'Roboto Mono', 'Courier New', Courier, monospace !important;
+  font-size: 14px !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+}
+
+.resume-preview code {
+  background-color: #edf2f7 !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  font-family: 'SF Mono', 'Roboto Mono', 'Courier New', Courier, monospace !important;
+  font-size: 14px !important;
+  color: #e53e3e !important;
+}
+
+.resume-preview pre code {
+  background-color: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  color: #2d3748 !important;
+}
+
+/* 任务列表样式 */
+.resume-preview ul.contains-task-list {
+  list-style-type: none !important;
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+}
+
+.resume-preview .task-list-item {
+  display: flex !important;
+  align-items: flex-start !important;
+  margin: 10px 0 !important;
+}
+
+.resume-preview .task-list-item input[type="checkbox"] {
+  margin-right: 10px !important;
+  margin-top: 6px !important;
+  flex-shrink: 0 !important;
+}
+
+/* 脚注样式 */
+.resume-preview sup {
+  font-size: 0.8em !important;
+  vertical-align: super !important;
+  color: #3498db !important;
+}
+
+.resume-preview .footnote-ref {
+  text-decoration: none !important;
+  border-bottom: none !important;
+  color: #3498db !important;
+}
+
+.resume-preview .footnote-definition {
+  margin: 15px 0 !important;
+  padding-left: 25px !important;
+  font-size: 14px !important;
+  color: #718096 !important;
+}
+
+
+
+/* 强调样式 */
+.resume-preview strong {
+  color: #1a202c !important;
+  font-weight: 700 !important;
+}
+
+.resume-preview em {
+  color: #718096 !important;
+  font-style: italic !important;
+}
+
+/* 链接样式 */
+.resume-preview a {
+  color: #3498db !important;
+  text-decoration: none !important;
+  border-bottom: 1px solid #3498db !important;
+  transition: all 0.2s ease !important;
+}
+
+.resume-preview a:hover {
+  color: #2980b9 !important;
+  border-bottom: 2px solid #2980b9 !important;
 }
 
 .preview-text pre {
@@ -950,6 +1270,64 @@ const downloadResume = async () => {
   .loading-spinner {
     width: 50px;
     height: 50px;
+  }
+  
+  /* 简历预览响应式优化 */
+  .resume-preview {
+    padding: 20px !important;
+    font-size: 14px !important;
+    line-height: 1.8 !important;
+  }
+  
+  .resume-preview h1 {
+    font-size: 24px !important;
+  }
+  
+  .resume-preview h2 {
+    font-size: 20px !important;
+  }
+  
+  .resume-preview h3 {
+    font-size: 16px !important;
+    padding: 10px 12px !important;
+  }
+  
+  /* 代码块响应式优化 */
+  .resume-preview pre {
+    padding: 15px !important;
+    font-size: 13px !important;
+  }
+  
+  /* 表格响应式优化 */
+  .resume-preview table {
+    display: block !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+  }
+  
+  /* 列表响应式优化 */
+  .resume-preview ul,
+  .resume-preview ol {
+    margin: 10px 0 10px 15px !important;
+    padding-left: 15px !important;
+  }
+  
+  /* 个人信息响应式优化 */
+  .resume-preview > p:first-child,
+  .resume-preview > p:nth-child(2) {
+    font-size: 16px !important;
+    line-height: 2.0 !important;
+  }
+}
+
+/* 平板设备优化 */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .resume-preview {
+    padding: 30px !important;
+  }
+  
+  .preview-text {
+    max-height: 600px !important;
   }
 }
 </style>

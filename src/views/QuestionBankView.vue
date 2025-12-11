@@ -101,9 +101,6 @@
           <div class="question-header">
             <div class="question-number">{{ index + 1 }}</div>
             <div class="question-type-badge">{{ question.type }}</div>
-            <button class="tts-btn" @click="toggleTTS(index)">
-              <span class="tts-icon">{{ question.isPlaying ? '⏸️' : '🔊' }}</span>
-            </button>
           </div>
           <div class="question-content">
             {{ question.content }}
@@ -184,8 +181,7 @@ const fetchQuestionBank = async () => {
     if (response.data && response.data.questions && response.data.questions.length > 0) {
       questions.value = response.data.questions.map(q => ({
         ...q,
-        showAnswer: false,
-        isPlaying: false
+        showAnswer: false
       }))
     } else {
       // 如果没有找到数据，清空当前显示
@@ -237,12 +233,11 @@ const generateQuestions = () => {
     userId: userId
   })
   .then(response => {
-    // 格式化问题数据，添加showAnswer和isPlaying字段
-    questions.value = response.data.questions.map(q => ({
-      ...q,
-      showAnswer: false,
-      isPlaying: false
-    }))
+    // 格式化问题数据，添加showAnswer字段
+  questions.value = response.data.questions.map(q => ({
+    ...q,
+    showAnswer: false
+  }))
     // 保存userId到localStorage，确保后续请求使用相同的userId
     if (response.data.userId) {
       localStorage.setItem('userId', response.data.userId)
@@ -265,11 +260,6 @@ const toggleAnswer = (index) => {
   questions.value[index].showAnswer = !questions.value[index].showAnswer
 }
 
-const toggleTTS = (index) => {
-  questions.value[index].isPlaying = !questions.value[index].isPlaying
-  // 这里可以添加实际的TTS逻辑
-}
-
 const exportQuestions = async () => {
   if (questions.value.length === 0) {
     alert('请先生成题库')
@@ -277,220 +267,193 @@ const exportQuestions = async () => {
   }
 
   try {
-    // 创建PDF文档
-    const pdf = new jsPDF({
+    // 创建一个临时容器来渲染所有题目内容
+    const tempContainer = document.createElement('div')
+    tempContainer.style.position = 'absolute'
+    tempContainer.style.top = '-9999px'
+    tempContainer.style.left = '-9999px'
+    tempContainer.style.width = '800px' // 设置合适的宽度
+    tempContainer.style.padding = '40px'
+    tempContainer.style.backgroundColor = '#ffffff'
+    tempContainer.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+    tempContainer.style.color = '#333333'
+    tempContainer.style.boxSizing = 'border-box'
+    document.body.appendChild(tempContainer)
+
+    // 生成标题和信息
+    const title = document.createElement('h1')
+    title.textContent = '智能面试题库'
+    title.style.textAlign = 'center'
+    title.style.marginBottom = '30px'
+    title.style.fontSize = '28px'
+    title.style.color = '#2c3e50'
+    tempContainer.appendChild(title)
+
+    if (customTopic.value) {
+      const topicInfo = document.createElement('div')
+      topicInfo.textContent = `话题：${customTopic.value}`
+      topicInfo.style.textAlign = 'center'
+      topicInfo.style.marginBottom = '20px'
+      topicInfo.style.color = '#666666'
+      topicInfo.style.fontSize = '16px'
+      tempContainer.appendChild(topicInfo)
+    }
+
+    const stats = document.createElement('div')
+    stats.textContent = `共 ${questions.value.length} 道题目`
+    stats.style.textAlign = 'center'
+    stats.style.marginBottom = '40px'
+    stats.style.color = '#666666'
+    stats.style.fontSize = '16px'
+    tempContainer.appendChild(stats)
+
+    const instructions = document.createElement('div')
+    instructions.textContent = '本题库基于您的简历内容生成，涵盖高频必问题、简历深挖题、专业技能题和行为/情景题等类型，可用于面试前的针对性练习。'
+    instructions.style.textAlign = 'center'
+    instructions.style.color = '#666666'
+    instructions.style.marginBottom = '50px'
+    instructions.style.lineHeight = '1.6'
+    tempContainer.appendChild(instructions)
+
+    // 生成题目列表
+    const questionsList = document.createElement('div')
+    questionsList.style.display = 'flex'
+    questionsList.style.flexDirection = 'column'
+    questionsList.style.gap = '30px'
+    tempContainer.appendChild(questionsList)
+
+    questions.value.forEach((question, index) => {
+      const questionBlock = document.createElement('div')
+      questionBlock.style.borderBottom = '1px solid #e0e0e0'
+      questionBlock.style.paddingBottom = '20px'
+      
+      // 题号和类型
+      const questionHeader = document.createElement('div')
+      questionHeader.style.display = 'flex'
+      questionHeader.style.justifyContent = 'space-between'
+      questionHeader.style.alignItems = 'center'
+      questionHeader.style.marginBottom = '15px'
+
+      const questionNumber = document.createElement('span')
+      questionNumber.textContent = `${index + 1}.`
+      questionNumber.style.fontWeight = 'bold'
+      questionNumber.style.fontSize = '18px'
+      questionHeader.appendChild(questionNumber)
+
+      const questionType = document.createElement('span')
+      questionType.textContent = question.type
+      questionType.style.backgroundColor = '#f0f4ff'
+      questionType.style.color = '#667eea'
+      questionType.style.padding = '5px 15px'
+      questionType.style.borderRadius = '20px'
+      questionType.style.fontSize = '12px'
+      questionType.style.fontWeight = 'bold'
+      questionHeader.appendChild(questionType)
+
+      questionBlock.appendChild(questionHeader)
+
+      // 问题内容
+      const questionContent = document.createElement('div')
+      questionContent.textContent = question.content
+      questionContent.style.fontSize = '16px'
+      questionContent.style.lineHeight = '1.8'
+      questionContent.style.marginBottom = '20px'
+      questionBlock.appendChild(questionContent)
+
+      // 参考答案
+      const answerSection = document.createElement('div')
+      answerSection.style.marginBottom = '15px'
+
+      const answerLabel = document.createElement('div')
+      answerLabel.textContent = '参考答案：'
+      answerLabel.style.fontWeight = 'bold'
+      answerLabel.style.marginBottom = '10px'
+      answerLabel.style.fontSize = '14px'
+      answerLabel.style.color = '#333333'
+      answerSection.appendChild(answerLabel)
+
+      const answerContent = document.createElement('div')
+      answerContent.textContent = question.answer
+      answerContent.style.marginLeft = '20px'
+      answerContent.style.color = '#555555'
+      answerContent.style.fontSize = '14px'
+      answerContent.style.lineHeight = '1.6'
+      answerSection.appendChild(answerContent)
+
+      questionBlock.appendChild(answerSection)
+
+      // 面试官意图
+      const analysisSection = document.createElement('div')
+
+      const analysisLabel = document.createElement('div')
+      analysisLabel.textContent = '面试官意图：'
+      analysisLabel.style.fontWeight = 'bold'
+      analysisLabel.style.marginBottom = '10px'
+      analysisLabel.style.fontSize = '14px'
+      analysisLabel.style.color = '#333333'
+      analysisSection.appendChild(analysisLabel)
+
+      const analysisContent = document.createElement('div')
+      analysisContent.textContent = question.analysis
+      analysisContent.style.marginLeft = '20px'
+      analysisContent.style.color = '#555555'
+      analysisContent.style.fontSize = '14px'
+      analysisContent.style.lineHeight = '1.6'
+      analysisContent.style.marginBottom = '15px'
+      analysisSection.appendChild(analysisContent)
+
+      questionBlock.appendChild(analysisSection)
+
+      questionsList.appendChild(questionBlock)
+    })
+
+    // 使用html2canvas将临时容器转换为canvas
+    const canvas = await html2canvas(tempContainer, {
+      scale: 2, // 提高清晰度
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false
+    })
+
+    // 计算PDF尺寸
+    const imgData = canvas.toDataURL('image/png')
+    const imgWidth = 210 // A4宽度，单位mm
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+
+    // 创建PDF
+    const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
       format: 'a4'
     })
 
-    // 定义页面配置
-    const pageWidth = 210 // A4宽度，单位mm
     const pageHeight = 297 // A4高度，单位mm
-    const margin = 15 // 页边距，单位mm
-    const contentWidth = pageWidth - 2 * margin // 内容宽度
-    const contentHeight = pageHeight - 2 * margin // 内容高度
-    let currentPage = 1
+    let heightLeft = imgHeight
+    let position = 0
 
-    // 定义每页面显示的题目数量
-    const questionsPerPage = 2
-    let currentY = margin // 当前Y坐标
-
-    // 创建一个临时容器来渲染单页内容
-    const tempContainer = document.createElement('div')
-    tempContainer.style.position = 'absolute'
-    tempContainer.style.top = '-9999px'
-    tempContainer.style.left = '-9999px'
-    tempContainer.style.width = `${pageWidth}mm`
-    tempContainer.style.padding = `${margin}mm`
-    tempContainer.style.backgroundColor = '#ffffff'
-    tempContainer.style.fontFamily = 'SimSun, Songti SC, serif'
-    tempContainer.style.fontSize = '12px'
-    tempContainer.style.lineHeight = '1.6'
-    tempContainer.style.color = '#333333'
-    tempContainer.style.boxSizing = 'border-box'
-    document.body.appendChild(tempContainer)
-
-    // 生成首页标题和信息
-    const renderTitlePage = () => {
-      tempContainer.innerHTML = ''
+    // 循环添加多页
+    while (heightLeft > 0) {
+      // 添加图片到当前页
+      doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
       
-      // 生成标题
-      const title = document.createElement('h1')
-      title.textContent = '智能面试题库'
-      title.style.textAlign = 'center'
-      title.style.marginBottom = '20px'
-      title.style.fontSize = '24px'
-      title.style.color = '#2c3e50'
-      tempContainer.appendChild(title)
-
-      // 生成话题信息
-      if (customTopic.value) {
-        const topicInfo = document.createElement('div')
-        topicInfo.textContent = `话题：${customTopic.value}`
-        topicInfo.style.textAlign = 'center'
-        topicInfo.style.marginBottom = '20px'
-        topicInfo.style.color = '#666666'
-        tempContainer.appendChild(topicInfo)
+      // 更新剩余高度和位置
+      heightLeft -= pageHeight
+      position -= pageHeight
+      
+      // 如果还有剩余内容，添加新页
+      if (heightLeft > 0) {
+        doc.addPage()
       }
-
-      // 生成统计信息
-      const stats = document.createElement('div')
-      stats.textContent = `共 ${questions.value.length} 道题目`
-      stats.style.textAlign = 'center'
-      stats.style.marginBottom = '30px'
-      stats.style.color = '#666666'
-      tempContainer.appendChild(stats)
-
-      // 生成说明文字
-      const instructions = document.createElement('div')
-      instructions.textContent = '本题库基于您的简历内容生成，涵盖高频必问题、简历深挖题、专业技能题和行为/情景题等类型，可用于面试前的针对性练习。'
-      instructions.style.textAlign = 'center'
-      instructions.style.color = '#666666'
-      instructions.style.marginTop = '50px'
-      tempContainer.appendChild(instructions)
-    }
-
-    // 渲染单页题目内容
-    const renderQuestionsPage = (startIndex, endIndex) => {
-      tempContainer.innerHTML = ''
-      
-      // 生成页码
-      const pageNumber = document.createElement('div')
-      pageNumber.textContent = `第 ${currentPage} 页`
-      pageNumber.style.textAlign = 'right'
-      pageNumber.style.marginBottom = '10px'
-      pageNumber.style.fontSize = '10px'
-      pageNumber.style.color = '#666666'
-      tempContainer.appendChild(pageNumber)
-      
-      // 生成题目列表
-      for (let i = startIndex; i < endIndex && i < questions.value.length; i++) {
-        const question = questions.value[i]
-        const questionBlock = document.createElement('div')
-        questionBlock.style.marginBottom = '25px'
-        questionBlock.style.borderBottom = '1px solid #e0e0e0'
-        questionBlock.style.paddingBottom = '15px'
-
-        // 题号和类型
-        const questionHeader = document.createElement('div')
-        questionHeader.style.display = 'flex'
-        questionHeader.style.justifyContent = 'space-between'
-        questionHeader.style.alignItems = 'center'
-        questionHeader.style.marginBottom = '10px'
-
-        const questionNumber = document.createElement('span')
-        questionNumber.textContent = `${i + 1}.`
-        questionNumber.style.fontWeight = 'bold'
-        questionNumber.style.fontSize = '14px'
-        questionHeader.appendChild(questionNumber)
-
-        const questionType = document.createElement('span')
-        questionType.textContent = question.type
-        questionType.style.backgroundColor = '#f0f4ff'
-        questionType.style.color = '#667eea'
-        questionType.style.padding = '3px 10px'
-        questionType.style.borderRadius = '12px'
-        questionType.style.fontSize = '11px'
-        questionType.style.fontWeight = 'bold'
-        questionHeader.appendChild(questionType)
-
-        questionBlock.appendChild(questionHeader)
-
-        // 问题内容
-        const questionContent = document.createElement('div')
-        questionContent.textContent = question.content
-        questionContent.style.marginBottom = '12px'
-        questionContent.style.fontSize = '13px'
-        questionBlock.appendChild(questionContent)
-
-        // 参考答案
-        const answerSection = document.createElement('div')
-        answerSection.style.marginBottom = '8px'
-
-        const answerLabel = document.createElement('div')
-        answerLabel.textContent = '参考答案：'
-        answerLabel.style.fontWeight = 'bold'
-        answerLabel.style.marginBottom = '4px'
-        answerLabel.style.fontSize = '12px'
-        answerSection.appendChild(answerLabel)
-
-        const answerContent = document.createElement('div')
-        answerContent.textContent = question.answer
-        answerContent.style.marginLeft = '10px'
-        answerContent.style.color = '#555555'
-        answerContent.style.fontSize = '11px'
-        answerSection.appendChild(answerContent)
-
-        questionBlock.appendChild(answerSection)
-
-        // 面试官意图
-        const analysisSection = document.createElement('div')
-
-        const analysisLabel = document.createElement('div')
-        analysisLabel.textContent = '面试官意图：'
-        analysisLabel.style.fontWeight = 'bold'
-        analysisLabel.style.marginBottom = '4px'
-        analysisLabel.style.fontSize = '12px'
-        analysisSection.appendChild(analysisLabel)
-
-        const analysisContent = document.createElement('div')
-        analysisContent.textContent = question.analysis
-        analysisContent.style.marginLeft = '10px'
-        analysisContent.style.color = '#555555'
-        analysisContent.style.fontSize = '11px'
-        analysisSection.appendChild(analysisContent)
-
-        questionBlock.appendChild(analysisSection)
-
-        tempContainer.appendChild(questionBlock)
-      }
-    }
-
-    // 渲染首页
-    renderTitlePage()
-    
-    // 将首页转换为canvas并添加到PDF
-    const titleCanvas = await html2canvas(tempContainer, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      logging: false
-    })
-    const titleImgData = titleCanvas.toDataURL('image/png')
-    pdf.addImage(titleImgData, 'PNG', 0, 0, pageWidth, pageHeight)
-    currentPage++
-
-    // 分页渲染题目
-    for (let i = 0; i < questions.value.length; i += questionsPerPage) {
-      // 添加新页面（除了首页）
-      if (i > 0) {
-        pdf.addPage()
-      }
-      
-      // 渲染当前页题目
-      renderQuestionsPage(i, i + questionsPerPage)
-      
-      // 将当前页转换为canvas并添加到PDF
-      const pageCanvas = await html2canvas(tempContainer, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false
-      })
-      const pageImgData = pageCanvas.toDataURL('image/png')
-      pdf.addImage(pageImgData, 'PNG', 0, 0, pageWidth, pageHeight)
-      currentPage++
     }
 
     // 保存PDF文件
-    pdf.save('智能面试题库.pdf')
+    doc.save('智能面试题库.pdf')
 
     // 清理临时容器
     document.body.removeChild(tempContainer)
   } catch (error) {
-    console.error('导出PDF失败:', error)
-    alert('导出PDF失败，请重试')
+    console.error('生成PDF失败:', error)
+    alert('生成PDF失败，请重试')
   }
 }
 
@@ -744,23 +707,7 @@ const exportQuestions = async () => {
   font-size: 0.9rem;
 }
 
-.tts-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.2rem;
-  padding: 5px;
-  color: #667eea;
-  transition: all 0.3s ease;
-}
 
-.tts-btn:hover {
-  transform: scale(1.1);
-}
-
-.tts-icon {
-  display: inline-block;
-}
 
 .question-content {
   font-size: 1.1rem;

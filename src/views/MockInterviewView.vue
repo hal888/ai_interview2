@@ -124,6 +124,15 @@
             </div>
             
             <div v-else class="voice-input-container">
+              <!-- 麦克风设备选择 -->
+              <div class="device-selector" v-if="availableAudioDevices.length > 1">
+                <label for="audio-device">选择麦克风设备：</label>
+                <select id="audio-device" v-model="selectedDeviceId" @change="detectAudioDevices">
+                  <option v-for="device in availableAudioDevices" :key="device.deviceId" :value="device.deviceId">
+                    {{ device.label || `麦克风 ${availableAudioDevices.indexOf(device) + 1}` }}
+                  </option>
+                </select>
+              </div>
               <div class="voice-status">
                 <span class="voice-icon">{{ isRecording ? '🔴' : '🎤' }}</span>
                 <span class="voice-text">{{ isRecording ? '正在录音...' : '点击开始录音' }}</span>
@@ -265,7 +274,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import jsPDF from 'jspdf'
@@ -306,6 +315,14 @@ const interviewerStyles = [
 const interactionModes = ['文字模式', '语音模式']
 const durations = [2, 15, 30, 45, 60]
 
+// 监听面试设置变化，实时从后端获取匹配的历史记录
+const setupWatchers = () => {
+  // 当面试设置变化时，实时从后端获取匹配的历史记录
+  watch([selectedStyle, selectedMode, selectedDuration], () => {
+    fetchMockInterviewHistory()
+  })
+}
+
 const reportData = ref({
   professionalScore: 85,
   logicScore: 78,
@@ -327,21 +344,79 @@ const reportData = ref({
   ]
 })
 
-const startInterview = () => {
+// 历史面试记录
+const interviewHistory = ref([])
+
+const startInterview = async () => {
+  // 如果选择语音模式，检测麦克风设备
+  if (selectedMode.value === '语音模式') {
+    isLoading.value = true
+    loadingMessage.value = '正在检测麦克风设备...'
+    
+    try {
+      // 检测麦克风设备
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('您的浏览器不支持麦克风录音功能，请使用Chrome、Firefox或Safari等现代浏览器')
+      }
+      
+      // 请求麦克风权限并检测设备
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      // 释放临时流
+      stream.getTracks().forEach(track => track.stop())
+      
+      // 检测可用设备数量
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const audioDevices = devices.filter(device => device.kind === 'audioinput')
+      
+      if (audioDevices.length === 0) {
+        throw new Error('未检测到麦克风设备，请连接麦克风后重试')
+      }
+      
+      // 设备正常，继续开始面试
+      await startInterviewProcess()
+    } catch (error) {
+      console.error('麦克风设备检测失败:', error)
+      isLoading.value = false
+      
+      // 分类处理不同的错误类型
+      let errorMessage = '麦克风设备检测失败，请检查设备连接和权限设置'
+      
+      if (error.name === 'NotFoundError' || error.message.includes('未检测到')) {
+        errorMessage = '未检测到麦克风设备，请连接麦克风后重试'
+      } else if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        errorMessage = '麦克风权限被拒绝，请在浏览器设置中允许麦克风访问'
+      } else if (error.name === 'NotReadableError') {
+        errorMessage = '麦克风设备被占用，请关闭其他使用麦克风的应用'
+      } else if (error.name === 'OverconstrainedError') {
+        errorMessage = '无法满足录音设备要求，请尝试调整麦克风设置'
+      }
+      
+      alert(errorMessage)
+      return
+    }
+  } else {
+    // 文字模式，直接开始面试
+    startInterviewProcess()
+  }
+}
+
+// 实际开始面试的处理函数
+const startInterviewProcess = async () => {
   isLoading.value = true
   loadingMessage.value = '正在准备面试...'
   
   // 从localStorage获取userId
   const userId = localStorage.getItem('userId') || ''
   
-  // 调用后端API开始面试
-  axios.post('http://127.0.0.1:5000/api/mock-interview/start', {
-    userId: userId,
-    style: selectedStyle.value,
-    mode: selectedMode.value,
-    duration: selectedDuration.value
-  })
-  .then(response => {
+  try {
+    // 调用后端API开始面试
+    const response = await axios.post('http://127.0.0.1:5000/api/mock-interview/start', {
+      userId: userId,
+      style: selectedStyle.value,
+      mode: selectedMode.value,
+      duration: selectedDuration.value
+    })
+    
     const data = response.data
     interviewId.value = data.interviewId
     isInterviewStarted.value = true
@@ -356,8 +431,7 @@ const startInterview = () => {
     askedQuestions.value = [data.currentQuestion.content]
     realTimeTips.value = data.tips
     startTimer()
-  })
-  .catch(error => {
+  } catch (error) {
     console.error('开始面试失败:', error)
     // 检查是否是用户不存在的错误
     if (error.response && error.response.data.error === 'User not found') {
@@ -366,10 +440,9 @@ const startInterview = () => {
     } else {
       alert('开始面试失败，请重试')
     }
-  })
-  .finally(() => {
+  } finally {
     isLoading.value = false
-  })
+  }
 }
 
 const pauseInterview = () => {
@@ -389,15 +462,23 @@ const endInterview = () => {
   isLoading.value = true
   loadingMessage.value = '正在生成面试报告...'
   
+  // 从localStorage获取userId
+  const userId = localStorage.getItem('userId') || ''
+  
   // 调用后端API结束面试，获取报告
   axios.post('http://127.0.0.1:5000/api/mock-interview/end', {
-    interviewId: interviewId.value
+    interviewId: interviewId.value,
+    userId: userId,
+    style: selectedStyle.value,
+    mode: selectedMode.value,
+    duration: selectedDuration.value
   })
   .then(response => {
     reportData.value = response.data
     showReport.value = true
     isInterviewStarted.value = false
     clearInterval(timer)
+    
   })
   .catch(error => {
     console.error('结束面试失败:', error)
@@ -469,13 +550,202 @@ const sendMessage = () => {
   })
 }
 
-const toggleRecording = () => {
+// 录音相关变量
+let mediaRecorder = null
+let audioChunks = []
+let audioStream = null
+const availableAudioDevices = ref([])
+const selectedDeviceId = ref('')
+
+// 检测可用麦克风设备
+const detectAudioDevices = async () => {
+  try {
+    // 请求麦克风权限
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    // 释放临时流
+    stream.getTracks().forEach(track => track.stop())
+    
+    // 获取所有音频输入设备
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    availableAudioDevices.value = devices.filter(device => device.kind === 'audioinput')
+    
+    // 设置默认设备
+    if (availableAudioDevices.value.length > 0) {
+      selectedDeviceId.value = availableAudioDevices.value[0].deviceId
+      realTimeTips.value.push(`检测到 ${availableAudioDevices.value.length} 个麦克风设备，已选择默认设备`)
+    } else {
+      realTimeTips.value.push('未检测到麦克风设备，请连接麦克风后重试')
+    }
+  } catch (error) {
+    console.error('检测麦克风设备失败:', error)
+    realTimeTips.value.push('无法访问麦克风设备，请检查权限设置')
+  }
+}
+
+// 在组件挂载时检测设备
+onMounted(() => {
+  realTimeTips.value = [
+    '保持微笑，展现自信',
+    '回答问题时保持逻辑清晰',
+    '注意控制语速，避免过快或过慢'
+  ]
+  
+  // 设置监听器
+  setupWatchers()
+  
+  // 获取用户的模拟面试历史记录
+  fetchMockInterviewHistory()
+  
+  // 页面加载时不再自动检测麦克风设备，只在选择语音模式并点击开始面试时检测
+  // 移除设备变化监听
+})
+
+// 组件卸载时移除监听
+onUnmounted(() => {
+  // 不再需要移除设备变化监听，因为我们已经不在onMounted中添加这个监听了
+  if (timer) {
+    clearInterval(timer)
+  }
+})
+
+const toggleRecording = async () => {
   isRecording.value = !isRecording.value
+  
   if (isRecording.value) {
     realTimeTips.value.push('录音已开始，请开始回答')
+    await startRecording()
   } else {
     realTimeTips.value.push('录音已结束')
-    // 这里可以添加语音转文字和发送消息的逻辑
+    stopRecording()
+  }
+}
+
+const startRecording = async () => {
+  try {
+    // 检查浏览器支持
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('您的浏览器不支持麦克风录音功能，请使用Chrome、Firefox或Safari等现代浏览器')
+    }
+    
+    // 不再自动检测设备，因为我们已经在startInterview函数中检测过了
+    
+    // 配置音频约束
+    const audioConstraints = {
+      audio: {
+        deviceId: selectedDeviceId.value ? { exact: selectedDeviceId.value } : true,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    }
+    
+    // 获取用户媒体设备
+    audioStream = await navigator.mediaDevices.getUserMedia(audioConstraints)
+    
+    // 创建MediaRecorder实例
+    mediaRecorder = new MediaRecorder(audioStream, {
+      mimeType: 'audio/webm;codecs=opus'
+    })
+    
+    // 清空之前的录音数据
+    audioChunks = []
+    
+    // 处理录音数据
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        audioChunks.push(event.data)
+      }
+    }
+    
+    // 开始录音
+    mediaRecorder.start(1000) // 每1秒推送一次数据
+    
+    // 处理录音结束
+    mediaRecorder.onstop = () => {
+      processRecording()
+    }
+  } catch (error) {
+    console.error('开始录音失败:', error)
+    
+    // 分类处理不同的错误类型
+    let errorMessage = '录音设备访问失败，请检查权限设置'
+    
+    if (error.name === 'NotFoundError') {
+      errorMessage = '未找到麦克风设备，请确保您已连接麦克风并选择正确的设备'
+    } else if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+      errorMessage = '麦克风权限被拒绝，请在浏览器设置中允许麦克风访问'
+    } else if (error.name === 'NotReadableError') {
+      errorMessage = '麦克风设备被占用，请关闭其他使用麦克风的应用'
+    } else if (error.name === 'OverconstrainedError') {
+      errorMessage = '无法满足录音设备要求，请尝试选择其他麦克风设备'
+    }
+    
+    realTimeTips.value.push(errorMessage)
+    isRecording.value = false
+  }
+}
+
+const stopRecording = () => {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop()
+  }
+  
+  // 关闭媒体流
+  if (audioStream) {
+    audioStream.getTracks().forEach(track => track.stop())
+    audioStream = null
+  }
+}
+
+const processRecording = async () => {
+  try {
+    isLoading.value = true
+    loadingMessage.value = '正在识别语音...'
+    
+    // 创建音频Blob
+    const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' })
+    
+    // 创建FormData发送到后端
+    const formData = new FormData()
+    formData.append('audio', audioBlob, 'recording.webm')
+    formData.append('interviewId', interviewId.value)
+    formData.append('questionId', currentQuestion.value)
+    
+    // 发送到后端进行语音识别和处理
+    const response = await axios.post('http://127.0.0.1:5000/api/mock-interview/voice-answer', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    
+    const data = response.data
+    
+    // 添加用户消息（语音转文字结果）
+    messages.value.push({
+      sender: 'user',
+      text: data.transcribedText,
+      time: getCurrentTime()
+    })
+    
+    // 添加AI回复
+    messages.value.push({
+      sender: 'ai',
+      text: `感谢您的回答。${data.feedback} 接下来请您回答：${data.nextQuestion.content}`,
+      time: getCurrentTime()
+    })
+    
+    askedQuestions.value.push(data.nextQuestion.content)
+    currentQuestion.value++
+    scrollToBottom()
+    
+    if (currentQuestion.value > totalQuestions.value) {
+      endInterview()
+    }
+  } catch (error) {
+    console.error('处理录音失败:', error)
+    realTimeTips.value.push('语音处理失败，请重试')
+  } finally {
+    isLoading.value = false
   }
 }
 
@@ -505,71 +775,56 @@ const saveReport = async () => {
     // 等待DOM更新
     await new Promise(resolve => setTimeout(resolve, 100))
     
-    // 创建PDF文档
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    })
-
-    // 定义页面配置
-    const pageWidth = 210 // A4宽度，单位mm
-    const pageHeight = 297 // A4高度，单位mm
-    const margin = 15 // 页边距，单位mm
-    const contentWidth = pageWidth - 2 * margin // 内容宽度
-
-    // 使用html2canvas将报告转换为canvas
+    // 使用html2canvas将HTML转换为canvas
     const canvas = await html2canvas(reportCard.value, {
-      scale: 2, // 提高分辨率
+      scale: 2, // 提高清晰度
       useCORS: true,
       backgroundColor: '#ffffff',
       logging: false
     })
-
+    
     // 恢复原始样式
     originalStyles.forEach(({ element, maxHeight, overflowY }) => {
       element.style.maxHeight = maxHeight
       element.style.overflowY = overflowY
     })
-
-    // 将canvas转换为图片数据
+    
+    // 计算PDF尺寸
     const imgData = canvas.toDataURL('image/png')
-    const imgWidth = canvas.width
-    const imgHeight = canvas.height
-    const ratio = imgHeight / imgWidth
-    const contentHeight = contentWidth * ratio
-
-    // 计算需要的页数
-    const totalPages = Math.ceil(contentHeight / (pageHeight - 2 * margin))
-
-    let currentY = margin
-
-    // 逐页添加内容
-    for (let page = 0; page < totalPages; page++) {
-      if (page > 0) {
-        pdf.addPage()
-        currentY = margin
+    const imgWidth = 210 // A4宽度，单位mm
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    
+    // 创建PDF
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    })
+    
+    const pageHeight = 297 // A4高度，单位mm
+    let heightLeft = imgHeight
+    let position = 0
+    
+    // 循环添加多页
+    while (heightLeft > 0) {
+      // 添加图片到当前页
+      doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      
+      // 更新剩余高度和位置
+      heightLeft -= pageHeight
+      position -= pageHeight
+      
+      // 如果还有剩余内容，添加新页
+      if (heightLeft > 0) {
+        doc.addPage()
       }
-
-      // 绘制图片
-      pdf.addImage(
-        imgData,
-        'PNG',
-        margin,
-        currentY,
-        contentWidth,
-        contentHeight
-      )
-
-      // 更新当前Y坐标
-      currentY += contentHeight
     }
-
+    
     // 保存PDF文件
-    pdf.save('面试复盘报告.pdf')
+    doc.save('面试复盘报告.pdf')
   } catch (error) {
-    console.error('导出PDF失败:', error)
-    alert('导出PDF失败，请重试')
+    console.error('生成PDF失败:', error)
+    alert('生成PDF失败，请重试')
   } finally {
     isLoading.value = false
   }
@@ -600,17 +855,6 @@ const scrollToBottom = () => {
     }
   }, 100)
 }
-// 页面加载时自动获取已有的面试策略内容
-onMounted(() => {
-  realTimeTips.value = [
-    '保持微笑，展现自信',
-    '回答问题时保持逻辑清晰',
-    '注意控制语速，避免过快或过慢'
-  ]
-  
-  // 获取用户的模拟面试历史记录
-  fetchMockInterviewHistory()
-})
 
 // 获取用户的模拟面试历史记录
 const fetchMockInterviewHistory = async () => {
@@ -618,9 +862,21 @@ const fetchMockInterviewHistory = async () => {
     const userId = localStorage.getItem('userId')
     if (!userId) return
     
-    const response = await axios.get(`http://127.0.0.1:5000/api/mock-interview/history?userId=${userId}`)
-    // 处理历史记录
-    console.log('模拟面试历史记录:', response.data)
+    // 发送当前选择的style、mode和duration参数
+    const response = await axios.get(`http://127.0.0.1:5000/api/mock-interview/history`, {
+      params: {
+        userId: userId,
+        style: selectedStyle.value,
+        mode: selectedMode.value,
+        duration: selectedDuration.value
+      }
+    })
+    // 保存历史记录
+    interviewHistory.value = response.data || []
+    console.log('模拟面试历史记录:', interviewHistory.value)
+    
+    // 检查是否有匹配的历史记录，如果有则自动加载
+    checkAndLoadMatchingReport()
   } catch (error) {
     console.error('获取模拟面试历史记录失败:', error)
     // 检查是否是用户不存在的错误
@@ -628,6 +884,46 @@ const fetchMockInterviewHistory = async () => {
       alert('请先上传简历进行优化，然后再开始模拟面试')
       router.push('/resume')
     }
+  }
+}
+
+// 检查并加载匹配的历史记录
+const checkAndLoadMatchingReport = () => {
+  console.log('开始检查匹配的历史记录...')
+  console.log('当前历史记录数量:', interviewHistory.value.length)
+  console.log('当前选择的设置:', {
+    style: selectedStyle.value,
+    mode: selectedMode.value,
+    duration: selectedDuration.value
+  })
+  
+  if (interviewHistory.value.length === 0) {
+    console.log('没有历史记录，隐藏报告')
+    showReport.value = false
+    return
+  }
+  
+  // 后端已经根据筛选条件返回了最新的一条记录，直接使用即可
+  const matchingHistory = interviewHistory.value[0]
+  console.log('后端返回的历史记录:', matchingHistory)
+  
+  // 检查返回的记录是否与当前选择的设置匹配
+  if (matchingHistory.style === selectedStyle.value && 
+      matchingHistory.mode === selectedMode.value && 
+      Math.abs(matchingHistory.duration - selectedDuration.value) <= 5) {
+    
+    if (matchingHistory.reportData) {
+      console.log('历史记录包含reportData，开始加载报告')
+      reportData.value = matchingHistory.reportData
+      showReport.value = true
+      console.log('报告已加载，showReport:', showReport.value)
+    } else {
+      console.log('历史记录不包含reportData，跳过加载')
+      showReport.value = false
+    }
+  } else {
+    console.log('后端返回的记录与当前选择的设置不匹配，隐藏报告')
+    showReport.value = false
   }
 }
 
@@ -1018,6 +1314,42 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 15px;
   align-items: center;
+}
+
+.device-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  max-width: 400px;
+}
+
+.device-selector label {
+  font-weight: bold;
+  color: #333;
+  font-size: 1rem;
+}
+
+.device-selector select {
+  width: 100%;
+  padding: 10px 15px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 1rem;
+  background-color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.device-selector select:hover {
+  border-color: #667eea;
+}
+
+.device-selector select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
 }
 
 .voice-status {
