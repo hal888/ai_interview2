@@ -8,7 +8,7 @@ export default defineConfig({
     allowedHosts: [
       'localhost',
       '127.0.0.1',
-      '4ccd0c47.r25.cpolar.top'
+      '255b32d2.r25.cpolar.top'
     ]
   }
 })

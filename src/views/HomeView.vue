@@ -96,7 +96,7 @@
 }
 
 .hero-section {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, #764ba2 100%);
   color: white;
   padding: 100px 0;
   text-align: center;
@@ -105,12 +105,12 @@
 }
 
 .hero-content h1 {
-  font-size: 3rem;
+  font-size: var(--font-size-h1);
   margin-bottom: 20px;
 }
 
 .hero-content p {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   margin-bottom: 40px;
   max-width: 800px;
   margin-left: auto;
@@ -127,7 +127,7 @@
 .btn {
   padding: 15px 30px;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   font-size: 1.1rem;
   cursor: pointer;
   text-decoration: none;
@@ -136,7 +136,7 @@
 }
 
 .primary-btn {
-  background-color: #42b883;
+  background-color: var(--color-secondary);
   color: white;
 }
 
@@ -163,20 +163,20 @@
 }
 
 .features-section h2 {
-  font-size: 2.5rem;
+  font-size: var(--font-size-h2);
   margin-bottom: 50px;
   color: #333;
 }
 
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 30px;
 }
 
 .feature-card {
   background-color: white;
-  padding: 40px 20px;
+  padding: 32px 20px;
   border-radius: 10px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
@@ -224,7 +224,7 @@
 }
 
 .feature-card h3 {
-  font-size: 1.5rem;
+  font-size: var(--font-size-h3);
   margin-bottom: 15px;
   color: #333;
 }
@@ -235,14 +235,14 @@
 }
 
 .learn-more {
-  color: #667eea;
+  color: var(--color-primary);
   text-decoration: none;
   font-weight: bold;
   transition: color 0.3s ease;
 }
 
 .learn-more:hover {
-  color: #5568d3;
+  color: var(--color-primary-strong);
   text-decoration: underline;
 }
 
@@ -255,7 +255,7 @@
 }
 
 .process-section h2 {
-  font-size: 2.5rem;
+  font-size: var(--font-size-h2);
   margin-bottom: 50px;
   color: #333;
 }
@@ -265,12 +265,12 @@
   justify-content: center;
   align-items: center;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 16px;
 }
 
 .step {
   background-color: white;
-  padding: 30px 20px;
+  padding: 24px 16px;
   border-radius: 10px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   min-width: 150px;
@@ -278,8 +278,8 @@
 }
 
 .step-number {
-  width: 50px;
-  height: 50px;
+  width: 44px;
+  height: 44px;
   background-color: #667eea;
   color: white;
   border-radius: 50%;
@@ -292,7 +292,7 @@
 }
 
 .step h3 {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   margin-bottom: 10px;
   color: #333;
 }
@@ -310,16 +310,16 @@
 
 @media (max-width: 768px) {
   .hero-content h1 {
-    font-size: 2rem;
+    font-size: var(--font-size-h1);
   }
   
   .hero-content p {
-    font-size: 1rem;
+    font-size: 0.95rem;
   }
   
   .features-section h2,
   .process-section h2 {
-    font-size: 2rem;
+    font-size: var(--font-size-h2);
   }
   
   .process-steps {

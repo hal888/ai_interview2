@@ -36,4 +36,25 @@ const router = createRouter({
   ]
 })
 
+// 访问受限页面前检查是否已上传简历
+const protectedRoutes = new Set(['selfIntro', 'questionBank', 'mockInterview', 'strategy'])
+router.beforeEach((to, from, next) => {
+  if (protectedRoutes.has(to.name)) {
+    let hasResume = false
+    try {
+      hasResume = typeof localStorage !== 'undefined' && !!localStorage.getItem('resumeId')
+    } catch (_) {
+      hasResume = false
+    }
+    if (!hasResume) {
+      if (typeof window !== 'undefined') {
+        window.alert('请先上传简历')
+      }
+      next({ name: 'resume' })
+      return
+    }
+  }
+  next()
+})
+
 export default router

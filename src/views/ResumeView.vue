@@ -19,11 +19,13 @@
         
         <div class="upload-options">
           <div class="file-input-container">
-            <input type="file" id="resume-file" accept=".pdf,.docx,.jpg,.jpeg,.png" @change="handleFileUpload" :disabled="isUploading" />
-            <label for="resume-file" class="file-input-label" :class="{ 'disabled': isUploading }">
+            <input ref="fileInputGeneric" type="file" id="resume-file" accept=".pdf,.docx,.jpg,.jpeg,.png" @change="handleFileUpload" :disabled="isUploading" />
+            <input ref="fileInputCamera" type="file" accept="image/*" capture="environment" @change="handleFileUpload" style="display:none" />
+            <input ref="fileInputGallery" type="file" accept="image/*" @change="handleFileUpload" style="display:none" />
+            <button class="file-input-label" :class="{ 'disabled': isUploading }" @click="openUploadModal">
               <span class="file-icon">📁</span>
               选择文件
-            </label>
+            </button>
           </div>
           
           <div class="drag-drop-area" @dragover.prevent @drop.prevent="handleDragDrop" :class="{ 'disabled': isUploading }">
@@ -131,6 +133,48 @@
         </div>
       </div>
     </div>
+    
+    <div v-if="showUploadModal" class="upload-modal-overlay" @click.self="hideUploadModal">
+      <div class="upload-modal">
+        <div class="upload-modal-header">
+          <div class="upload-modal-title">选择来源</div>
+          <button class="upload-modal-close" @click="hideUploadModal">✕</button>
+        </div>
+        <div class="upload-options-grid">
+          <div class="upload-option" @click="openCamera">
+            <div class="upload-option-icon">📷</div>
+            <div>相机</div>
+          </div>
+          <div class="upload-option" @click="openGallery">
+            <div class="upload-option-icon">🖼️</div>
+            <div>相册</div>
+          </div>
+          <div class="upload-option" @click="openFiles">
+            <div class="upload-option-icon">📁</div>
+            <div>文件</div>
+          </div>
+        </div>
+        <div class="recent-files-header">
+          <div>最近文件</div>
+          <div class="recent-files-actions">
+            <button class="browse-btn" @click="openSystemFilePicker">浏览</button>
+          </div>
+        </div>
+        <div class="recent-files-list">
+          <div v-if="recentFilesLoading">加载中...</div>
+          <div v-else-if="recentFilesError">{{ recentFilesError }}</div>
+          <div v-else>
+            <div v-for="item in recentFiles" :key="item.id" class="recent-file-item" @click="handleRecentFileClick(item)">
+              <div class="file-type-icon" :class="fileTypeClass(item)">{{ fileTypeLabel(item) }}</div>
+              <div class="recent-file-meta">
+                <div class="recent-file-name">{{ item.name }}</div>
+                <div class="recent-file-time">{{ formatTime(item.lastModified) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -147,6 +191,13 @@ const resumeData = ref(null)
 const activeTab = ref('STAR法则重写')
 const optimizationTabs = ['STAR法则重写', '关键词注入']
 const isUploading = ref(false)
+const showUploadModal = ref(false)
+const recentFiles = ref([])
+const recentFilesLoading = ref(false)
+const recentFilesError = ref('')
+const fileInputGeneric = ref(null)
+const fileInputCamera = ref(null)
+const fileInputGallery = ref(null)
 
 // 页面加载时自动获取最新的简历优化内容
 onMounted(async () => {
@@ -175,12 +226,15 @@ onMounted(async () => {
     // 如果没有找到数据或其他错误，忽略，等待用户上传新简历
     console.log('获取最新简历失败:', error)
   }
+  loadRecentFiles()
 })
 
 const handleFileUpload = (event) => {
   const file = event.target.files[0]
   if (file) {
     uploadResume(file)
+    saveRecentFile(file)
+    hideUploadModal()
   }
 }
 
@@ -230,6 +284,155 @@ const uploadResume = (file) => {
   .finally(() => {
     isUploading.value = false
   })
+}
+
+const openUploadModal = () => {
+  showUploadModal.value = true
+}
+
+const hideUploadModal = () => {
+  showUploadModal.value = false
+}
+
+const openCamera = () => {
+  if (isUploading.value) return
+  if (fileInputCamera.value) fileInputCamera.value.click()
+}
+
+const openGallery = () => {
+  if (isUploading.value) return
+  if (fileInputGallery.value) fileInputGallery.value.click()
+}
+
+const openFiles = async () => {
+  if (isUploading.value) return
+  try {
+    if (window.showOpenFilePicker) {
+      const handles = await window.showOpenFilePicker({
+        multiple: false,
+        types: [
+          {
+            description: 'Documents',
+            accept: {
+              'application/pdf': ['.pdf'],
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+              'image/*': ['.png', '.jpg', '.jpeg']
+            }
+          }
+        ]
+      })
+      if (handles && handles.length > 0) {
+        const file = await handles[0].getFile()
+        uploadResume(file)
+        saveRecentFile(file)
+        hideUploadModal()
+      }
+    } else if (fileInputGeneric.value) {
+      fileInputGeneric.value.click()
+    }
+  } catch (e) {
+    recentFilesError.value = '无法打开文件选择器'
+  }
+}
+
+const openSystemFilePicker = () => {
+  if (fileInputGeneric.value) fileInputGeneric.value.click()
+}
+
+const initDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('ai_interview_files', 1)
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result
+      if (!db.objectStoreNames.contains('recentFiles')) {
+        db.createObjectStore('recentFiles', { keyPath: 'id', autoIncrement: true })
+      }
+    }
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+}
+
+const saveRecentFile = async (file) => {
+  try {
+    const db = await initDB()
+    const tx = db.transaction('recentFiles', 'readwrite')
+    const store = tx.objectStore('recentFiles')
+    const record = {
+      name: file.name,
+      type: file.type,
+      lastModified: file.lastModified || Date.now(),
+      blob: file
+    }
+    store.add(record)
+    tx.oncomplete = () => {
+      db.close()
+      loadRecentFiles()
+    }
+  } catch (_) {}
+}
+
+const loadRecentFiles = async () => {
+  recentFilesLoading.value = true
+  recentFilesError.value = ''
+  try {
+    const db = await initDB()
+    const tx = db.transaction('recentFiles', 'readonly')
+    const store = tx.objectStore('recentFiles')
+    const req = store.getAll()
+    req.onsuccess = () => {
+      const items = (req.result || [])
+        .sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0))
+        .slice(0, 10)
+      recentFiles.value = items
+      db.close()
+      recentFilesLoading.value = false
+    }
+    req.onerror = () => {
+      recentFilesLoading.value = false
+      recentFilesError.value = '读取最近文件失败'
+      db.close()
+    }
+  } catch (e) {
+    recentFilesLoading.value = false
+    recentFilesError.value = '不支持最近文件读取'
+  }
+}
+
+const handleRecentFileClick = async (item) => {
+  try {
+    const file = new File([item.blob], item.name, { type: item.type, lastModified: item.lastModified })
+    uploadResume(file)
+    hideUploadModal()
+  } catch (_) {}
+}
+
+const fileTypeClass = (item) => {
+  if ((item.type || '').includes('pdf')) return 'icon-pdf'
+  if ((item.type || '').includes('word') || item.name.endsWith('.docx')) return 'icon-docx'
+  if ((item.type || '').startsWith('image/')) return 'icon-img'
+  return 'icon-docx'
+}
+
+const fileTypeLabel = (item) => {
+  if ((item.type || '').includes('pdf')) return 'PDF'
+  if ((item.type || '').includes('word') || item.name.endsWith('.docx')) return 'DOCX'
+  if ((item.type || '').startsWith('image/')) return 'IMG'
+  return 'FILE'
+}
+
+const formatTime = (ts) => {
+  try {
+    const d = new Date(ts)
+    const y = d.getFullYear()
+    const m = String(d.getMonth()+1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    return `${y}-${m}-${day} ${hh}:${mm}`
+  } catch (_) {
+    return ''
+  }
 }
 
 const getScoreDescription = (score) => {
@@ -413,6 +616,7 @@ const downloadResume = async () => {
   cursor: pointer;
   font-weight: bold;
   transition: all 0.3s ease;
+  border: none;
 }
 
 .file-input-label:hover {
@@ -1318,5 +1522,146 @@ const downloadResume = async () => {
   .preview-text {
     max-height: 600px !important;
   }
+}
+/* 上传来源选择模态样式 */
+.upload-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+}
+
+.upload-modal {
+  width: 90%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+  padding: 20px;
+}
+
+.upload-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.upload-modal-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.upload-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.upload-options-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 15px 0;
+}
+
+.upload-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.upload-option:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.upload-option-icon {
+  font-size: 1.5rem;
+}
+
+.recent-files-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.recent-files-list {
+  margin-top: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.recent-file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.file-type-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  color: #fff;
+}
+
+.icon-pdf { background: #e74c3c; }
+.icon-docx { background: #2980b9; }
+.icon-img { background: #27ae60; }
+
+.recent-file-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.recent-file-name {
+  font-weight: 600;
+  color: #333;
+}
+
+.recent-file-time {
+  font-size: 0.85rem;
+  color: #777;
+}
+
+.recent-files-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.browse-btn {
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+@media (max-width: 428px) {
+  .upload-options-grid { gap: 10px; }
+  .upload-option { padding: 12px 8px; }
 }
 </style>

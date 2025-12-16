@@ -4,8 +4,6 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 
 // 导航栏显示状态
 const navbarVisible = ref(true)
-// 导航栏折叠状态
-const isNavbarCollapsed = ref(false)
 // 上次滚动位置
 const lastScrollY = ref(0)
 // 滚动阈值，避免微小滚动触发
@@ -19,7 +17,7 @@ const animationDuration = 200
 // 移动设备宽度阈值
 const mobileThreshold = 768
 // 窗口宽度
-const windowWidth = ref(window.innerWidth)
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
 
 // 计算是否为移动设备视图
 const isMobileView = computed(() => {
@@ -28,7 +26,7 @@ const isMobileView = computed(() => {
 
 // 滚动事件处理函数
 const handleScroll = () => {
-  const currentScrollY = window.scrollY
+  const currentScrollY = typeof window !== 'undefined' ? window.scrollY || 0 : 0
   const scrollDifference = Math.abs(currentScrollY - lastScrollY.value)
   
   // 如果滚动距离小于阈值，不触发状态变化
@@ -49,10 +47,6 @@ const handleScroll = () => {
     } else {
       // 向下滚动时隐藏，向上滚动时显示
       navbarVisible.value = currentScrollY < lastScrollY.value
-      // 向下滚动时自动折叠导航栏
-      if (currentScrollY > lastScrollY.value && isMobileView.value) {
-        isNavbarCollapsed.value = true
-      }
     }
     
     // 更新上次滚动位置
@@ -60,27 +54,16 @@ const handleScroll = () => {
   }, 50)
 }
 
-// 切换导航栏折叠状态
-const toggleNavbar = () => {
-  if (isMobileView.value) {
-    isNavbarCollapsed.value = !isNavbarCollapsed.value
-  }
-}
-
 // 窗口大小变化事件处理
 const handleResize = () => {
-  windowWidth.value = window.innerWidth
-  // 当窗口从移动视图切换到桌面视图时，自动展开导航栏
-  if (!isMobileView.value) {
-    isNavbarCollapsed.value = false
-  }
+  windowWidth.value = typeof window !== 'undefined' ? window.innerWidth : windowWidth.value
 }
 
 // 组件挂载时添加事件监听
 onMounted(() => {
   // 确保页面加载时导航栏显示
   navbarVisible.value = true
-  lastScrollY.value = window.scrollY
+  lastScrollY.value = typeof window !== 'undefined' ? window.scrollY || 0 : 0
   window.addEventListener('scroll', handleScroll, { passive: true })
   window.addEventListener('resize', handleResize)
 })
@@ -97,10 +80,9 @@ onUnmounted(() => {
 
 <template>
   <div class="app-container">
-    <!-- Navigation Bar -->
-    <nav class="navbar" :class="{ 
-      'navbar-hidden': !navbarVisible && window.scrollY > topThreshold,
-      'navbar-collapsed': isNavbarCollapsed && isMobileView 
+    <!-- Desktop Navigation Bar -->
+    <nav class="navbar desktop-navbar" :class="{ 
+      'navbar-hidden': !navbarVisible && lastScrollY > topThreshold 
     }">
       <div class="navbar-container">
         <div class="navbar-header">
@@ -110,21 +92,9 @@ onUnmounted(() => {
               <span class="brand-name">AI智能面试宝典</span>
             </router-link>
           </div>
-          
-          <!-- 移动端折叠按钮 -->
-          <button 
-            class="navbar-toggle" 
-            @click="toggleNavbar"
-            aria-label="Toggle navigation"
-          >
-            <span class="navbar-toggle-icon">
-              <span v-if="isNavbarCollapsed">☰</span>
-              <span v-else>✕</span>
-            </span>
-          </button>
         </div>
         
-        <div class="navbar-menu" :class="{ 'menu-expanded': !isNavbarCollapsed }">
+        <div class="navbar-menu">
           <router-link to="/" class="nav-link" exact-active-class="active">首页</router-link>
           <router-link to="/resume" class="nav-link" exact-active-class="active">简历优化</router-link>
           <router-link to="/self-intro" class="nav-link" exact-active-class="active">自我介绍</router-link>
@@ -135,17 +105,31 @@ onUnmounted(() => {
       </div>
     </nav>
 
+    <!-- Mobile Top Brand -->
+    <div class="mobile-top-brand">
+      <div class="brand-content">
+        <router-link to="/" class="brand-link">
+          <div class="brand-icon">🤖</div>
+          <span class="brand-name">AI智能面试宝典</span>
+        </router-link>
+      </div>
+    </div>
+
     <!-- Main Content -->
     <main class="main-content">
       <router-view />
     </main>
 
-    <!-- Footer -->
-    <footer class="footer">
-      <div class="footer-container">
-        <p>&copy; 2025 AI智能面试宝典. 保留所有权利.</p>
+    <nav class="mobile-navbar">
+      <div class="mobile-nav-container">
+        <router-link to="/" class="nav-link" exact-active-class="active">首页</router-link>
+        <router-link to="/resume" class="nav-link" exact-active-class="active">简历优化</router-link>
+        <router-link to="/self-intro" class="nav-link" exact-active-class="active">自我介绍</router-link>
+        <router-link to="/question-bank" class="nav-link" exact-active-class="active">智能题库</router-link>
+        <router-link to="/mock-interview" class="nav-link" exact-active-class="active">模拟面试</router-link>
+        <router-link to="/strategy" class="nav-link" exact-active-class="active">面试策略</router-link>
       </div>
-    </footer>
+    </nav>
   </div>
 </template>
 
@@ -282,8 +266,8 @@ p, span, div {
 
 /* Navigation Bar - 全局一致样式 */
 .navbar {
-  background-color: #ffffff !important;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1) !important;
+  background-color: var(--color-bg) !important;
+  box-shadow: 0 2px 10px var(--color-shadow) !important;
   position: sticky !important;
   top: 0 !important;
   z-index: 1000 !important;
@@ -304,7 +288,7 @@ p, span, div {
 
 /* 导航栏容器 */
 .navbar-container {
-  max-width: 1200px !important;
+  max-width: var(--content-max) !important;
   margin: 0 auto !important;
   padding: 0 20px !important;
   display: flex !important;
@@ -349,9 +333,8 @@ p, span, div {
   align-items: center !important;
   background-color: transparent !important;
   transition: all 0.3s ease !important;
-  width: 100% !important;
+  flex: 1 !important;
   justify-content: center !important;
-  overflow: hidden !important;
   max-height: 500px !important;
 }
 
@@ -372,6 +355,40 @@ p, span, div {
   padding: 10px 0 !important;
 }
 
+/* 桌面端导航样式 */
+.desktop-navbar {
+  display: block;
+}
+
+/* 移动端顶部品牌 */
+.mobile-top-brand {
+  display: none;
+  background-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 15px 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  transition: all 0.3s ease;
+  padding-top: env(safe-area-inset-top);
+}
+
+/* 品牌内容容器 */
+.brand-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 移动端底部导航在桌面端默认隐藏 */
+.mobile-navbar {
+  display: none;
+}
+
 /* 确保在桌面端不应用隐藏效果 */
 @media (min-width: 769px) {
   .navbar.navbar-hidden {
@@ -384,47 +401,118 @@ p, span, div {
   }
   
   .navbar-menu {
-    flex-wrap: wrap !important;
+    flex-wrap: nowrap !important;
     justify-content: flex-end !important;
   }
   
   .navbar-toggle {
     display: none !important;
   }
+  /* 桌面端隐藏底部导航栏 */
+  .mobile-navbar {
+    display: none !important;
+  }
 }
 
 /* 移动端样式 */
 @media (max-width: 768px) {
-  .navbar-toggle {
-    display: block !important;
+  /* 隐藏桌面端导航 */
+  .desktop-navbar {
+    display: none;
   }
   
-  .navbar-menu {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 0 !important;
-    max-height: 0 !important;
-    opacity: 0 !important;
-    visibility: hidden !important;
-    padding: 0 !important;
+  /* 显示移动端顶部品牌 */
+  .mobile-top-brand {
+    display: block;
   }
   
-  .menu-expanded {
-    max-height: 500px !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-    padding: 10px 0 !important;
+  /* 移除移动端底部导航样式 */
+  .mobile-navbar {
+    display: block;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: var(--color-bg);
+    box-shadow: 0 -2px 10px var(--color-shadow);
+    z-index: 1000;
+    padding: 10px 0;
+    padding-bottom: env(safe-area-inset-bottom);
   }
   
-  .nav-link {
-    display: block !important;
-    text-align: center !important;
-    padding: 12px 0 !important;
-    border-top: 1px solid #f0f0f0 !important;
+  /* 移动端导航容器 */
+  .mobile-nav-container {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: 0 5px;
+    gap: 5px;
   }
   
-  .nav-link:last-child {
-    border-bottom: 1px solid #f0f0f0 !important;
+  /* 移动端导航链接 */
+  .mobile-navbar .nav-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 10px 5px;
+    text-align: center;
+    font-size: 0.8rem !important;
+    font-weight: 500 !important;
+    min-width: 0;
+    border: none !important;
+    gap: 4px;
+    color: var(--color-text-secondary) !important;
+    transition: all 0.2s ease;
+    border-radius: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  /* 移动端导航链接悬停效果 */
+  .mobile-navbar .nav-link:hover {
+    background-color: #f5f5f5;
+    color: var(--color-primary) !important;
+  }
+  
+  /* 移动端导航链接激活状态 */
+  .mobile-navbar .nav-link.active {
+    color: var(--color-primary) !important;
+    font-weight: 600 !important;
+  }
+  
+  /* 调整激活状态下划线位置 */
+  .mobile-navbar .nav-link.active::after {
+    bottom: 6px !important;
+    height: 2px !important;
+    background-color: var(--color-primary) !important;
+    border-radius: 2px !important;
+  }
+  
+  /* 调整主内容区，避免被底部导航遮挡 */
+  .main-content {
+    padding-bottom: 85px;
+  }
+  
+  /* 调整移动端footer */
+  .footer {
+    margin-bottom: 65px;
+  }
+  
+  /* 小屏幕手机优化 */
+  @media (max-width: 375px) {
+    .mobile-navbar .nav-link {
+      font-size: 0.75rem !important;
+      padding: 8px 2px;
+    }
+    
+    .mobile-navbar {
+      padding: 8px 0;
+    }
   }
 }
 
@@ -440,7 +528,7 @@ p, span, div {
   align-items: center !important;
   gap: 15px !important;
   text-decoration: none !important;
-  color: #333 !important;
+  color: var(--color-text) !important;
   font-weight: bold !important;
   background-color: transparent !important;
   flex-shrink: 0;
@@ -459,7 +547,7 @@ p, span, div {
 
 .brand-name {
   font-size: 1.5rem !important;
-  color: #667eea !important;
+  color: var(--color-primary) !important;
   background-color: transparent !important;
   white-space: nowrap;
   overflow: hidden;
@@ -472,13 +560,13 @@ p, span, div {
   gap: 30px !important;
   align-items: center !important;
   background-color: transparent !important;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
 }
 
 .nav-link {
   text-decoration: none !important;
-  color: #333 !important;
+  color: var(--color-text) !important;
   font-weight: 500 !important;
   font-size: 1rem !important;
   transition: all 0.3s ease !important;
@@ -491,13 +579,13 @@ p, span, div {
 }
 
 .nav-link:hover {
-  color: #667eea !important;
+  color: var(--color-primary) !important;
   text-decoration: none !important;
   background-color: transparent !important;
 }
 
 .nav-link.active {
-  color: #667eea !important;
+  color: var(--color-primary) !important;
   background-color: transparent !important;
 }
 
@@ -508,7 +596,7 @@ p, span, div {
   left: 0 !important;
   width: 100% !important;
   height: 2px !important;
-  background-color: #667eea !important;
+  background-color: var(--color-primary) !important;
   border-radius: 2px !important;
 }
 
@@ -516,31 +604,12 @@ p, span, div {
 .main-content {
   flex: 1;
   padding: 30px 20px;
-  max-width: 1200px;
+  max-width: var(--content-max);
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
 }
 
-/* Footer */
-.footer {
-  background-color: #333;
-  color: white;
-  padding: 20px;
-  text-align: center;
-  margin-top: auto;
-}
-
-.footer-container {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.footer p {
-  margin: 0;
-  font-size: 0.9rem;
-  opacity: 0.8;
-}
 
 /* Responsive Design */
 /* 平板设备优化 */
