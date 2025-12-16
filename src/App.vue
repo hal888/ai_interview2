@@ -12,8 +12,6 @@ const scrollThreshold = 10
 const topThreshold = 50
 // 防抖动计时器
 let debounceTimer = null
-// 滚动动画持续时间
-const animationDuration = 200
 // 移动设备宽度阈值
 const mobileThreshold = 768
 // 窗口宽度
@@ -133,130 +131,7 @@ onUnmounted(() => {
   </div>
 </template>
 
-<style>
-/* Global Styles */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  /* 移动端优化字体 */
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  /* 响应式字体基础设置 */
-  font-size: 16px;
-  /* 确保文本对比度符合WCAG AA标准 */
-  color: #333333;
-  /* 优化行高 */
-  line-height: 1.5;
-  /* 优化字间距 */
-  letter-spacing: 0.01em;
-  /* 背景色设置确保对比度 */
-  background-color: #ffffff;
-}
-
-/* 响应式字体大小 - 基于屏幕宽度 */
-@media (max-width: 320px) {
-  body {
-    font-size: 14px;
-  }
-}
-
-@media (min-width: 321px) and (max-width: 375px) {
-  body {
-    font-size: 15px;
-  }
-}
-
-@media (min-width: 376px) and (max-width: 428px) {
-  body {
-    font-size: 16px;
-  }
-}
-
-/* 字体层级结构 */
-/* 主标题 */
-h1 {
-  font-size: 2rem;
-  font-weight: 700;
-  line-height: 1.2;
-  color: #2c3e50;
-  margin-bottom: 1rem;
-}
-
-/* 副标题 */
-h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  line-height: 1.3;
-  color: #34495e;
-  margin-bottom: 0.875rem;
-}
-
-/* 三级标题 */
-h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  line-height: 1.4;
-  color: #34495e;
-  margin-bottom: 0.75rem;
-}
-
-/* 四级标题 */
-h4 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  line-height: 1.4;
-  color: #34495e;
-  margin-bottom: 0.625rem;
-}
-
-/* 正文 */
-p, span, div {
-  font-size: 1rem;
-  line-height: 1.5;
-  color: #333333;
-}
-
-/* 辅助文字 */
-.secondary-text {
-  font-size: 0.875rem;
-  color: #666666;
-  line-height: 1.5;
-}
-
-/* 小文字 */
-.small-text {
-  font-size: 0.75rem;
-  color: #999999;
-  line-height: 1.5;
-}
-
-/* 确保正文最小字号 */
-*:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
-  font-size: clamp(14px, 1rem, 18px);
-}
-
-/* 移动端标题响应式调整 */
-@media (max-width: 428px) {
-  h1 {
-    font-size: 1.75rem;
-  }
-  
-  h2 {
-    font-size: 1.375rem;
-  }
-  
-  h3 {
-    font-size: 1.125rem;
-  }
-  
-  h4 {
-    font-size: 1rem;
-  }
-}
-
+<style scoped>
 /* App Container */
 .app-container {
   display: flex;
@@ -267,15 +142,17 @@ p, span, div {
 /* Navigation Bar - 全局一致样式 */
 .navbar {
   background-color: var(--color-bg) !important;
-  box-shadow: 0 2px 10px var(--color-shadow) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
   position: sticky !important;
   top: 0 !important;
   z-index: 1000 !important;
   width: 100% !important;
   margin: 0 !important;
   padding: 0 !important;
-  transition: transform 0.2s ease !important;
+  transition: all 0.3s ease !important;
   transform: translateY(0);
+  backdrop-filter: blur(10px);
+  background-color: rgba(255, 255, 255, 0.95) !important;
   /* 确保导航栏层级正确 */
   will-change: transform;
   overflow: hidden;
@@ -290,7 +167,7 @@ p, span, div {
 .navbar-container {
   max-width: var(--content-max) !important;
   margin: 0 auto !important;
-  padding: 0 20px !important;
+  padding: 0 25px !important;
   display: flex !important;
   flex-direction: column !important;
   background-color: transparent !important;
@@ -315,15 +192,27 @@ p, span, div {
   cursor: pointer !important;
   padding: 8px !important;
   font-size: 1.5rem !important;
-  color: #667eea !important;
+  color: var(--color-primary) !important;
   transition: all 0.3s ease !important;
   display: none !important;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 折叠按钮图标 */
 .navbar-toggle-icon {
   display: block !important;
   background-color: transparent !important;
+}
+
+/* 折叠按钮悬停效果 */
+.navbar-toggle:hover {
+  background-color: rgba(102, 126, 234, 0.1);
+  transform: rotate(90deg);
 }
 
 /* 导航菜单 */
@@ -569,38 +458,60 @@ p, span, div {
 
 .nav-link {
   text-decoration: none !important;
-  color: var(--color-text) !important;
+  color: var(--color-text-secondary) !important;
   font-weight: 500 !important;
   font-size: 1rem !important;
   transition: all 0.3s ease !important;
   position: relative !important;
   background-color: transparent !important;
   display: inline-block;
-  padding: 8px 0;
-  min-width: 80px;
+  padding: 12px 16px !important;
+  min-width: 90px;
   text-align: center;
+  border-radius: 8px;
+  border: 2px solid transparent;
 }
 
 .nav-link:hover {
   color: var(--color-primary) !important;
   text-decoration: none !important;
-  background-color: transparent !important;
+  background-color: rgba(102, 126, 234, 0.08) !important;
+  border-color: rgba(102, 126, 234, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
 }
 
 .nav-link.active {
   color: var(--color-primary) !important;
-  background-color: transparent !important;
+  background-color: rgba(102, 126, 234, 0.1) !important;
+  border-color: var(--color-primary);
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+  transform: translateY(-2px);
 }
 
+/* 移除旧的下划线样式，使用边框和背景色替代 */
 .nav-link.active::after {
+  content: none !important;
+}
+
+/* 为导航链接添加顶部装饰条作为视觉指示器 */
+.nav-link::before {
   content: '' !important;
   position: absolute !important;
-  bottom: -8px !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 2px !important;
+  top: 0 !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: 0 !important;
+  height: 3px !important;
   background-color: var(--color-primary) !important;
-  border-radius: 2px !important;
+  border-radius: 3px !important;
+  transition: all 0.3s ease !important;
+}
+
+.nav-link:hover::before,
+.nav-link.active::before {
+  width: 80% !important;
 }
 
 /* Main Content */

@@ -8,7 +8,7 @@ export default defineConfig({
     allowedHosts: [
       'localhost',
       '127.0.0.1',
-      '255b32d2.r25.cpolar.top'
+      '2b67bf7a.r25.cpolar.top'
     ],
     proxy: {
       '/api': {
@@ -17,6 +17,42 @@ export default defineConfig({
         secure: false
       }
     }
+  },
+  build: {
+    // 启用代码分割
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // 将第三方库打包成单独的 chunk
+          'vue-vendor': ['vue', 'vue-router'],
+          'axios-vendor': ['axios'],
+          'utils-vendor': ['highlight.js', 'marked']
+        },
+        // 优化资源名称，便于缓存
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
+      }
+    },
+    // 启用压缩
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true
+      }
+    },
+    // 生成 source map 用于调试
+    sourcemap: false,
+    // 优化 CSS
+    cssCodeSplit: true,
+    // 优化资源大小
+    assetsInlineLimit: 4096 // 4kb 以下的资源内联
+  },
+  // 优化依赖预构建
+  optimizeDeps: {
+    include: ['vue', 'vue-router', 'axios'],
+    exclude: []
   }
 })
 

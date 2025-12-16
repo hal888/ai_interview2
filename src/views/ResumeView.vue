@@ -35,6 +35,7 @@
       </div>
     </div>
 
+    <!-- 只有在有简历数据时才渲染分析结果 -->
     <div v-if="resumeData" class="resume-analysis-section">
       <h2>简历分析结果</h2>
       
@@ -134,6 +135,7 @@
       </div>
     </div>
     
+    <!-- 只有在需要时才渲染上传模态框，减少初始渲染DOM节点 -->
     <div v-if="showUploadModal" class="upload-modal-overlay" @click.self="hideUploadModal">
       <div class="upload-modal">
         <div class="upload-modal-header">
@@ -147,39 +149,42 @@
           </div>
         </div>
        
-        <div class="recent-files-header">
-          <div>最近文件</div>
-          <div class="recent-files-actions">
-            <button class="browse-btn" @click="openSystemFilePicker">浏览</button>
+        <!-- 延迟渲染最近文件列表，减少初始渲染时间 -->
+        <div class="recent-files-container" v-if="showUploadModal">
+          <div class="recent-files-header">
+            <div>最近文件</div>
+            <div class="recent-files-actions">
+              <button class="browse-btn" @click="openSystemFilePicker">浏览</button>
+            </div>
+          </div>
+          <div class="recent-files-list">
+            <div v-if="recentFilesLoading" class="recent-files-loading">
+              <div class="loading-dots">
+                <span class="loading-dot"></span>
+                <span class="loading-dot"></span>
+                <span class="loading-dot"></span>
+              </div>
+              <span>加载最近文件中...</span>
+            </div>
+            <div v-else-if="recentFilesError" class="recent-files-error">
+              <span class="error-icon">⚠️</span>
+              <span>{{ recentFilesError }}</span>
+            </div>
+            <div v-else-if="recentFiles.length === 0" class="recent-files-empty">
+              <span class="empty-icon">📁</span>
+              <span>暂无最近文件</span>
+            </div>
+            <div v-else>
+              <div v-for="item in recentFiles" :key="item.id" class="recent-file-item" @click="handleRecentFileClick(item)">
+                <div class="file-type-icon" :class="fileTypeClass(item)">{{ fileTypeLabel(item) }}</div>
+                <div class="recent-file-meta">
+                  <div class="recent-file-name">{{ item.name }}</div>
+                  <div class="recent-file-time">{{ formatTime(item.lastModified) }}</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="recent-files-list">
-  <div v-if="recentFilesLoading" class="recent-files-loading">
-    <div class="loading-dots">
-      <span class="loading-dot"></span>
-      <span class="loading-dot"></span>
-      <span class="loading-dot"></span>
-    </div>
-    <span>加载最近文件中...</span>
-  </div>
-  <div v-else-if="recentFilesError" class="recent-files-error">
-    <span class="error-icon">⚠️</span>
-    <span>{{ recentFilesError }}</span>
-  </div>
-  <div v-else-if="recentFiles.length === 0" class="recent-files-empty">
-    <span class="empty-icon">📁</span>
-    <span>暂无最近文件</span>
-  </div>
-  <div v-else>
-    <div v-for="item in recentFiles" :key="item.id" class="recent-file-item" @click="handleRecentFileClick(item)">
-      <div class="file-type-icon" :class="fileTypeClass(item)">{{ fileTypeLabel(item) }}</div>
-      <div class="recent-file-meta">
-        <div class="recent-file-name">{{ item.name }}</div>
-        <div class="recent-file-time">{{ formatTime(item.lastModified) }}</div>
-      </div>
-    </div>
-  </div>
-</div>
       </div>
     </div>
   </div>
@@ -188,11 +193,49 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
-import { jsPDF } from 'jspdf'
-import html2canvas from 'html2canvas'
-import { marked } from 'marked'
-import hljs from 'highlight.js'
-import 'highlight.js/styles/github.css' // 导入highlight.js的GitHub样式
+
+// 动态导入大型库，减少初始加载时间
+const loadLibraries = {
+  jsPDF: () => import('jspdf'),
+  html2canvas: () => import('html2canvas'),
+  marked: () => import('marked'),
+  highlightjs: async () => {
+    const hljs = await import('highlight.js')
+    await import('highlight.js/styles/github.css') // 动态导入样式
+    return hljs
+  }
+}
+
+// 延迟初始化marked和hljs
+let marked = null
+let hljs = null
+
+// 初始化marked和hljs的函数
+const initMarkedAndHighlight = async () => {
+  if (!marked || !hljs) {
+    const [markedModule, hljsModule] = await Promise.all([
+      loadLibraries.marked(),
+      loadLibraries.highlightjs()
+    ])
+    marked = markedModule.marked
+    hljs = hljsModule.default
+    
+    // 配置marked库，使用highlight.js进行代码块语法高亮
+    marked.setOptions({
+      highlight: function(code, lang) {
+        // 如果指定了语言且hljs支持该语言，则进行语法高亮
+        if (lang && hljs.getLanguage(lang)) {
+          try {
+            return hljs.highlight(code, { language: lang }).value
+          } catch (__) {}
+        }
+        return code // 使用默认的文本渲染
+      },
+      breaks: true, // 支持换行
+      gfm: true // 支持GitHub风格的Markdown
+    })
+  }
+}
 
 const resumeData = ref(null)
 const activeTab = ref('STAR法则重写')
@@ -209,31 +252,38 @@ const fileInputGallery = ref(null)
 // 页面加载时自动获取最新的简历优化内容
 onMounted(async () => {
   try {
-    // 从localStorage获取userId，如果没有则生成一个新的
+    // 从localStorage获取userId和resumeId
     let userId = localStorage.getItem('userId')
-    if (!userId) {
-      userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      localStorage.setItem('userId', userId)
-    }
+    const resumeId = localStorage.getItem('resumeId')
     
-    // 调用后端API获取最新的简历数据，使用相对路径，自动适配不同环境
-    const response = await axios.post('/api/resume/get', {
-      userId: userId
-    })
-    
-    // 如果返回了简历数据，填充到页面上
-    if (response.data && response.data.optimizedResume) {
-      resumeData.value = response.data
-      // 保存resumeId到localStorage
-      if (response.data.resumeId) {
-        localStorage.setItem('resumeId', response.data.resumeId)
+    // 只有在用户有resumeId的情况下才调用API获取简历数据
+    if (resumeId) {
+      if (!userId) {
+        userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        localStorage.setItem('userId', userId)
+      }
+      
+      // 调用后端API获取最新的简历数据，使用相对路径，自动适配不同环境
+      const response = await axios.post('/api/resume/get', {
+        userId: userId
+      })
+      
+      // 如果返回了简历数据，填充到页面上
+      if (response.data && response.data.optimizedResume) {
+        resumeData.value = response.data
+        // 更新formattedResume
+        await updateFormattedResume()
       }
     }
   } catch (error) {
     // 如果没有找到数据或其他错误，忽略，等待用户上传新简历
     console.log('获取最新简历失败:', error)
   }
-  loadRecentFiles()
+  
+  // 异步加载最近文件，不阻塞主线程
+  setTimeout(() => {
+    loadRecentFiles()
+  }, 100)
 })
 
 const handleFileUpload = (event) => {
@@ -335,120 +385,145 @@ const openSystemFilePicker = () => {
   if (fileInputGeneric.value) fileInputGeneric.value.click()
 }
 
+// 优化IndexedDB初始化，确保不会阻塞主线程
 const initDB = () => {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('ai_interview_files', 1)
+    // 检查浏览器是否支持IndexedDB
+    if (!window.indexedDB) {
+      reject(new Error('浏览器不支持IndexedDB'))
+      return
+    }
+    
+    // 增加数据库版本号，触发onupgradeneeded事件来创建缺失的索引
+    const request = indexedDB.open('ai_interview_files', 2)
+    
     request.onupgradeneeded = (event) => {
       const db = event.target.result
+      let store
+      
+      // 检查objectStore是否存在，不存在则创建
       if (!db.objectStoreNames.contains('recentFiles')) {
-        const store = db.createObjectStore('recentFiles', { keyPath: 'id', autoIncrement: true })
+        store = db.createObjectStore('recentFiles', { keyPath: 'id', autoIncrement: true })
+      } else {
+        // 如果objectStore已存在，获取它
+        store = event.target.transaction.objectStore('recentFiles')
+      }
+      
+      // 检查索引是否存在，不存在则创建
+      if (!store.indexNames.contains('lastModified')) {
         store.createIndex('lastModified', 'lastModified', { unique: false })
       }
     }
+    
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error)
   })
 }
 
+// 优化保存最近文件函数，避免阻塞主线程
 const saveRecentFile = async (file) => {
-  try {
-    // 先检查浏览器是否支持IndexedDB
-    if (!window.indexedDB) {
-      console.log('浏览器不支持IndexedDB，无法保存最近文件')
-      return
-    }
-    
-    const db = await initDB()
-    const tx = db.transaction('recentFiles', 'readwrite')
-    const store = tx.objectStore('recentFiles')
-    
-    // 获取所有现有文件
-    const getAllReq = store.getAll()
-    getAllReq.onsuccess = () => {
-      const existingFiles = getAllReq.result || []
-      const existingFileIndex = existingFiles.findIndex(item => item.name === file.name)
+  // 使用setTimeout将操作放入事件队列，避免阻塞主线程
+  setTimeout(async () => {
+    try {
+      const db = await initDB()
+      const tx = db.transaction('recentFiles', 'readwrite')
+      const store = tx.objectStore('recentFiles')
       
+      // 创建新文件记录
       const record = {
         name: file.name,
         type: file.type,
         lastModified: file.lastModified || Date.now()
       }
       
-      if (existingFileIndex >= 0) {
-        // 如果文件已存在，更新它
-        store.put({ ...existingFiles[existingFileIndex], ...record })
-      } else {
-        // 如果文件不存在，添加新文件
-        store.add(record)
+      // 更高效的查询：使用索引查询最近的10个文件
+      const index = store.index('lastModified')
+      const getAllReq = index.getAll(null, 10)
+      
+      getAllReq.onsuccess = () => {
+        const existingFiles = getAllReq.result || []
+        const existingFileIndex = existingFiles.findIndex(item => item.name === file.name)
         
-        // 如果超过10个文件，删除最旧的
-        if (existingFiles.length >= 10) {
-          const oldestFile = existingFiles.reduce((oldest, current) => {
-            return (oldest.lastModified || 0) < (current.lastModified || 0) ? oldest : current
-          })
-          store.delete(oldestFile.id)
+        if (existingFileIndex >= 0) {
+          // 如果文件已存在，更新它
+          store.put({ ...existingFiles[existingFileIndex], ...record })
+        } else {
+          // 如果文件不存在，添加新文件
+          store.add(record)
+          
+          // 如果超过10个文件，删除最旧的
+          if (existingFiles.length >= 10) {
+            // 直接取现有文件中最旧的一个，不需要重新排序
+            const oldestFile = existingFiles.reduce((oldest, current) => {
+              return (oldest.lastModified || 0) < (current.lastModified || 0) ? oldest : current
+            })
+            store.delete(oldestFile.id)
+          }
         }
       }
+      
+      tx.oncomplete = () => {
+        db.close()
+        // 延迟更新最近文件列表，避免频繁更新
+        setTimeout(() => {
+          loadRecentFiles()
+        }, 100)
+      }
+      
+      tx.onerror = () => {
+        db.close()
+        console.error('保存最近文件失败')
+      }
+    } catch (error) {
+      console.error('保存最近文件失败:', error)
     }
-    
-    tx.oncomplete = () => {
-      db.close()
-      loadRecentFiles()
-    }
-    
-    tx.onerror = () => {
-      db.close()
-      console.error('保存最近文件失败')
-    }
-  } catch (error) {
-    console.error('保存最近文件失败:', error)
-  }
+  }, 0)
 }
 
+// 优化加载最近文件函数，避免阻塞主线程
 const loadRecentFiles = async () => {
   recentFilesLoading.value = true
   recentFilesError.value = ''
   recentFiles.value = []
   
-  try {
-    // 先检查浏览器是否支持IndexedDB
-    if (!window.indexedDB) {
+  // 使用setTimeout将操作放入事件队列，避免阻塞主线程
+  setTimeout(async () => {
+    try {
+      const db = await initDB()
+      const tx = db.transaction('recentFiles', 'readonly')
+      const store = tx.objectStore('recentFiles')
+      const index = store.index('lastModified')
+      
+      // 使用索引按降序获取最近的10个文件
+      const req = index.getAll(null, 10)
+      
+      req.onsuccess = () => {
+        // 确保按降序排序
+        const items = (req.result || [])
+          .sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0))
+          .slice(0, 10)
+        
+        recentFiles.value = items
+        recentFilesLoading.value = false
+        recentFilesError.value = ''
+      }
+      
+      req.onerror = () => {
+        recentFilesLoading.value = false
+        recentFilesError.value = '读取最近文件失败，请稍后重试'
+        recentFiles.value = []
+        console.error('读取最近文件失败')
+      }
+      
+      tx.oncomplete = () => db.close()
+      tx.onerror = () => db.close()
+    } catch (error) {
       recentFilesLoading.value = false
       recentFilesError.value = ''
       recentFiles.value = []
-      console.log('浏览器不支持IndexedDB，无法加载最近文件')
-      return
+      console.error('加载最近文件失败:', error)
     }
-    
-    const db = await initDB()
-    const tx = db.transaction('recentFiles', 'readonly')
-    const store = tx.objectStore('recentFiles')
-    const req = store.getAll()
-    
-    req.onsuccess = () => {
-      const items = (req.result || [])
-        .sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0))
-        .slice(0, 10)
-      recentFiles.value = items
-      recentFilesLoading.value = false
-      recentFilesError.value = ''
-    }
-    
-    req.onerror = () => {
-      recentFilesLoading.value = false
-      recentFilesError.value = '读取最近文件失败，请稍后重试'
-      recentFiles.value = []
-      console.error('读取最近文件失败')
-    }
-    
-    tx.oncomplete = () => db.close()
-    tx.onerror = () => db.close()
-  } catch (error) {
-    recentFilesLoading.value = false
-    recentFilesError.value = ''
-    recentFiles.value = []
-    console.error('加载最近文件失败:', error)
-  }
+  }, 0)
 }
 
 const handleRecentFileClick = (item) => {
@@ -493,43 +568,46 @@ const getKeywordType = (keyword) => {
   return techKeywords.includes(keyword) ? '技术关键词' : '软技能关键词'
 }
 
-// 配置marked库，使用highlight.js进行代码块语法高亮
-marked.setOptions({
-  highlight: function(code, lang) {
-    // 如果指定了语言且hljs支持该语言，则进行语法高亮
-    if (lang && hljs.getLanguage(lang)) {
-      try {
-        return hljs.highlight(code, { language: lang }).value
-      } catch (__) {}
-    }
-    // 否则返回原始代码，不进行高亮
-    return code
-  },
-  breaks: true, // 允许换行符转换为<br>
-  gfm: true, // 启用GitHub风格的Markdown
-  sanitize: true // 启用HTML sanitize，确保安全渲染
-})
+// 格式化简历内容 - 使用ref而不是computed，支持异步初始化
+const formattedResume = ref('')
 
-// 格式化简历内容
-const formattedResume = computed(() => {
-  if (!resumeData.value?.optimizedResume) return ''
+// 监听resumeData变化，更新formattedResume
+const updateFormattedResume = async () => {
+  if (!resumeData.value?.optimizedResume) {
+    formattedResume.value = ''
+    return
+  }
   
   try {
+    // 确保marked已初始化
+    await initMarkedAndHighlight()
+    
     let resume = resumeData.value.optimizedResume
     
     // 使用marked库解析Markdown为HTML
-    return marked(resume)
+    formattedResume.value = marked(resume)
   } catch (error) {
     console.error('Markdown解析错误:', error)
-    return '<p>简历内容解析失败，请稍后重试</p>'
+    formattedResume.value = '<p>简历内容解析失败，请稍后重试</p>'
   }
-})
+}
+
+// 监听resumeData变化
+resumeData.value && updateFormattedResume()
 
 // 下载简历功能 - PDF格式
 const downloadResume = async () => {
   if (!resumeData.value?.optimizedResume) return
   
   try {
+    // 动态导入所需库
+    const [html2canvasModule, jsPDFModule] = await Promise.all([
+      loadLibraries.html2canvas(),
+      loadLibraries.jsPDF()
+    ])
+    const html2canvas = html2canvasModule.default
+    const { jsPDF } = jsPDFModule
+    
     // 获取简历预览元素
     const resumeElement = document.querySelector('.resume-preview')
     if (!resumeElement) return
@@ -654,28 +732,42 @@ const downloadResume = async () => {
   display: none;
 }
 
-/* 确保其他文件输入元素也能正常工作 */
+/* 确保文件输入元素能正常工作 */
 input[type="file"] {
+  display: none;
   cursor: pointer;
 }
 
+/* 优化文件选择按钮样式 */
 .file-input-label {
   display: inline-flex;
   align-items: center;
   gap: 10px;
   padding: 15px 30px;
-  background-color: #667eea;
+  background-color: var(--color-primary);
   color: white;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-weight: bold;
-  transition: all 0.3s ease;
+  font-weight: 600;
+  transition: all 0.2s ease;
   border: none;
+  outline: none;
 }
 
 .file-input-label:hover {
-  background-color: #5568d3;
-  transform: translateY(-2px);
+  background-color: var(--color-primary-strong);
+  transform: translateY(-1px);
+}
+
+.file-input-label.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.file-input-label.disabled:hover {
+  background-color: var(--color-primary);
+  transform: none;
 }
 
 .file-icon {
