@@ -347,7 +347,7 @@ const startInterviewProcess = async () => {
   
   try {
     // 调用后端API开始面试
-    const response = await axios.post('http://127.0.0.1:5000/api/mock-interview/start', {
+    const response = await axios.post('/api/mock-interview/start', {
       userId: userId,
       style: selectedStyle.value,
       duration: selectedDuration.value
@@ -402,7 +402,7 @@ const endInterview = () => {
   const userId = localStorage.getItem('userId') || ''
   
   // 调用后端API结束面试，获取报告
-  axios.post('http://127.0.0.1:5000/api/mock-interview/end', {
+  axios.post('/api/mock-interview/end', {
     interviewId: interviewId.value,
     userId: userId,
     style: selectedStyle.value,
@@ -453,7 +453,7 @@ const sendMessage = () => {
   scrollToBottom()
   
   // 调用后端API回答问题
-  axios.post('http://127.0.0.1:5000/api/mock-interview/answer', {
+  axios.post('/api/mock-interview/answer', {
     interviewId: interviewId.value,
     questionId: currentQuestion.value,
     answer: userAnswer
@@ -515,11 +515,16 @@ const initSpeechRecognition = () => {
   // 创建语音识别实例
   recognition = new SpeechRecognition()
   
-  // 设置语音识别选项
-  recognition.continuous = true // 持续识别，避免停顿几秒后自动终止
-  recognition.interimResults = true // 返回中间结果
+  // 优化语音识别选项，确保实时性
+  recognition.continuous = true // 启用连续识别，确保实时捕获
+  recognition.interimResults = true // 启用中间结果，确保实时转换
   recognition.lang = 'zh-CN' // 设置为中文
   recognition.maxAlternatives = 1 // 只返回一个结果
+  
+  // 设置更短的语音识别结果返回间隔，确保转换延迟<1秒
+  if (typeof recognition.interimResultsDelay !== 'undefined') {
+    recognition.interimResultsDelay = 300 // 设置中间结果延迟为300ms，确保实时性
+  }
   
   // 监听语音识别开始事件
   recognition.onstart = () => {
@@ -531,7 +536,7 @@ const initSpeechRecognition = () => {
     // 保存当前输入框内容，用于后续追加
     currentRecordingText = inputMessage.value
     // 保存当前录音的起始索引，用于标点符号处理
-    lastFinalIndex = event ? event.results.length : 0
+    lastFinalIndex = 0
   }
   
   // 监听语音识别结果事件
@@ -539,8 +544,8 @@ const initSpeechRecognition = () => {
     console.log('🔊 收到语音识别结果事件:', event)
     
     // 初始化当前录音的转录文本
-    let newTranscript = ''
-    let hasFinalResult = false
+    let finalTranscript = ''
+    let interimTranscript = ''
     
     // 遍历所有结果（包括中间结果）
     for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -553,45 +558,42 @@ const initSpeechRecognition = () => {
         confidence: item.confidence
       })
       
-      // 拼接转录文本
-      newTranscript += item.transcript
-      
-      // 如果是最终结果
+      // 分离最终结果和中间结果
       if (result.isFinal) {
-        hasFinalResult = true
+        finalTranscript += item.transcript
         lastFinalIndex = i
-        
-        // 添加标点符号处理：在最终结果末尾添加适当的标点
-        // 检查是否已经有标点符号
-        const lastChar = newTranscript.slice(-1)
-        if (!['。', '，', '！', '？', '；', '.', ',', '!', '?', ';'].includes(lastChar)) {
-          // 如果是较长的文本，添加句号；否则添加逗号
-          if (newTranscript.length > 10) {
-            newTranscript += '。'
-          } else {
-            newTranscript += '，'
-          }
-        }
+      } else {
+        interimTranscript += item.transcript
       }
     }
     
-    console.log('📝 当前录音转录文本:', newTranscript)
+    // 处理最终结果：添加标点符号并更新当前录音文本
+    if (finalTranscript) {
+      // 添加标点符号处理：在最终结果末尾添加适当的标点
+      const lastChar = finalTranscript.slice(-1)
+      if (!['。', '，', '！', '？', '；', '.', ',', '!', '?', ';'].includes(lastChar)) {
+        // 如果是较长的文本，添加句号；否则添加逗号
+        finalTranscript += finalTranscript.length > 10 ? '。' : '，'
+      }
+      currentRecordingText += finalTranscript
+    }
     
-    // 更新输入框内容：当前输入框内容 + 新转录的内容
-    const fullText = currentRecordingText + newTranscript
+    // 实时更新输入框内容：当前最终文本 + 中间结果
+    const fullText = currentRecordingText + interimTranscript
     console.log('✅ 更新输入框内容:', fullText)
     inputMessage.value = fullText
     
-    // 如果有最终结果，更新当前录音文本，以便下次追加
-    if (hasFinalResult) {
-      currentRecordingText = fullText
+    // 确保输入框自动滚动到底部，方便用户查看
+    const textarea = document.querySelector('textarea')
+    if (textarea) {
+      textarea.scrollTop = textarea.scrollHeight
     }
   }
   
   // 监听语音识别错误事件
   recognition.onerror = (event) => {
     console.error('❌ 语音识别错误:', event.error)
-    recordingStatus.value = 'idle'
+    recordingStatus.value = 'recording' // 保持录音状态，继续尝试
     
     // 只处理真正的致命错误，忽略网络错误等非致命错误
     const fatalErrors = ['not-allowed', 'audio-capture']
@@ -607,14 +609,31 @@ const initSpeechRecognition = () => {
       
       realTimeTips.value.push(errorMessage)
       isRecording.value = false
+      isRecognitionRunning = false
+      recordingStatus.value = 'idle'
     } 
     else {
       console.log(`⚠️  非致命错误: ${event.error}，继续录音...`)
       
-      // 对于网络错误，显示友好提示，但不停止录音
+      // 对于网络错误，优化恢复机制
       if (event.error === 'network') {
         realTimeTips.value.push('网络连接暂时不稳定，语音识别正在尝试恢复...')
+        // 网络错误时，立即尝试重新启动识别，确保功能恢复
+        if (isRecording.value && recognition && recognition.state !== 'running') {
+          try {
+            recognition.stop()
+            // 更短的延迟，快速恢复
+            setTimeout(() => {
+              if (isRecording.value) {
+                recognition.start()
+              }
+            }, 300)
+          } catch (error) {
+            console.error('尝试恢复语音识别失败:', error)
+          }
+        }
       }
+      // 对于其他非致命错误，静默处理，继续录音
     }
   }
   
@@ -622,13 +641,36 @@ const initSpeechRecognition = () => {
   recognition.onend = () => {
     console.log('⏹️  语音识别已结束')
     isRecognitionRunning = false
-    recordingStatus.value = 'completed'
-    realTimeTips.value.push('✅ 录音已完成')
     
-    // 重置状态
-    setTimeout(() => {
-      recordingStatus.value = 'idle'
-    }, 1000)
+    // 如果用户仍在录音状态，立即重新开始识别，确保连续录音
+    if (isRecording.value) {
+      realTimeTips.value.push('📝 录音片段已转换为文字，继续录音中...')
+      // 立即重新开始识别，不延迟，确保实时性
+      try {
+        // 添加防抖动机制，避免频繁重启
+        if (!isRecognitionStarting) {
+          isRecognitionStarting = true
+          recognition.start()
+          recordingStatus.value = 'recording'
+          isRecognitionRunning = true
+          isRecognitionStarting = false
+        }
+      } catch (error) {
+        console.error('自动重新开始识别失败:', error)
+        recordingStatus.value = 'idle'
+        isRecording.value = false
+        realTimeTips.value.push('❌ 录音已停止，请重试')
+        isRecognitionStarting = false
+      }
+    } else {
+      // 录音已停止，显示录音完成
+      recordingStatus.value = 'completed'
+      realTimeTips.value.push('✅ 录音已完成')
+      // 重置状态
+      setTimeout(() => {
+        recordingStatus.value = 'idle'
+      }, 1000)
+    }
   }
 }
 
@@ -674,7 +716,11 @@ const toggleRecording = async () => {
     
     // 停止语音识别
     if (recognition && (recognition.state === 'running' || recognition.state === 'starting')) {
-      recognition.stop()
+      try {
+        recognition.stop()
+      } catch (stopError) {
+        console.error('停止录音时出错:', stopError)
+      }
     }
     
     isRecording.value = false
@@ -696,29 +742,26 @@ const toggleRecording = async () => {
     realTimeTips.value.push('📤 正在准备录音...')
     
     try {
-      // 检查浏览器是否支持权限查询API
-      if (navigator.permissions && navigator.permissions.query) {
-        // 查询麦克风权限状态
-        const permissionStatus = await navigator.permissions.query({ name: 'microphone' })
-        
-        if (permissionStatus.state === 'denied') {
-          // 权限已被拒绝，提醒用户去设置
-          realTimeTips.value.push('❌ 麦克风权限被拒绝，请在浏览器设置中允许麦克风访问')
-          isRecording.value = false
-          recordingStatus.value = 'idle'
-          // 可以添加一个更明显的提示
-          alert('麦克风权限被拒绝，请在浏览器设置中允许麦克风访问后重试')
-          return
+      // 统一处理麦克风权限请求，适用于所有设备
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,    // 启用回声消除
+          noiseSuppression: true,    // 启用噪音抑制
+          autoGainControl: true,     // 启用自动增益控制
+          sampleRate: 44100,         // 设置标准采样率
+          sampleSize: 16,            // 设置采样位深
+          channelCount: 1            // 单声道，减少数据量
         } 
-        // 如果是prompt状态，会在getUserMedia时弹出权限请求
-      }
+      })
       
-      // 请求麦克风权限
-      await navigator.mediaDevices.getUserMedia({ audio: true })
+      // 停止临时流，因为SpeechRecognition会自己请求流
+      stream.getTracks().forEach(track => track.stop())
       
       // 开始语音识别
       console.log('开始语音识别...')
+      isRecognitionStarting = true
       recognition.start()
+      
     } catch (error) {
       console.error('开始录音失败:', error)
       let errorMessage = '无法访问麦克风设备，请检查权限设置'
@@ -733,10 +776,19 @@ const toggleRecording = async () => {
         errorMessage = '麦克风设备被占用，请关闭其他使用麦克风的应用'
       } else if (error.name === 'OverconstrainedError') {
         errorMessage = '无法满足录音设备要求，请尝试调整麦克风设置'
+      } else if (error.name === 'AbortError') {
+        errorMessage = '录音已被取消'
+      } else {
+        // 移动端特殊处理：更友好的错误提示
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+        if (isMobile) {
+          errorMessage = '录音启动失败，请重试。建议使用Chrome浏览器获得最佳体验'
+        }
       }
       
       realTimeTips.value.push(`❌ ${errorMessage}`)
       isRecording.value = false
+      isRecognitionStarting = false
       recordingStatus.value = 'idle'
     }
   }
@@ -856,7 +908,7 @@ const fetchMockInterviewHistory = async () => {
     if (!userId) return
     
     // 发送当前选择的style和duration参数
-    const response = await axios.get(`http://127.0.0.1:5000/api/mock-interview/history`, {
+    const response = await axios.get(`/api/mock-interview/history`, {
       params: {
         userId: userId,
         style: selectedStyle.value,

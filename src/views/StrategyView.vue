@@ -251,7 +251,7 @@ const generateAnalysis = () => {
   const userId = getUserId()
   
   // 调用后端API
-  axios.post('http://127.0.0.1:5000/api/strategy/analysis', {
+  axios.post('/api/strategy/analysis', {
     backgroundInfo: backgroundInfo.value,
     directions: selectedDirections.value,
     userId: userId
@@ -282,7 +282,7 @@ const generateQuestions = () => {
   const userId = getUserId()
   
   // 调用后端API
-  axios.post('http://127.0.0.1:5000/api/strategy/questions', {
+  axios.post('/api/strategy/questions', {
     companyName: companyInfo.value.companyName,
     position: companyInfo.value.position,
     questionTypes: selectedQuestionTypes.value,
@@ -321,7 +321,7 @@ const fetchAnalysisHistory = async () => {
   const userId = getUserId()
   
   try {
-    const response = await axios.get(`http://127.0.0.1:5000/api/strategy/analysis/history?userId=${userId}`)
+    const response = await axios.get(`/api/strategy/analysis/history?userId=${userId}`)
     if (response.data && response.data.length > 0) {
       // 使用最新的分析结果
       analysisResult.value = response.data[0].result
@@ -342,7 +342,7 @@ const fetchQuestionsHistory = async () => {
   const userId = getUserId()
   
   try {
-    const response = await axios.get(`http://127.0.0.1:5000/api/strategy/questions/history?userId=${userId}`)
+    const response = await axios.get(`/api/strategy/questions/history?userId=${userId}`)
     if (response.data && response.data.length > 0) {
       // 使用最新的问题结果
       generatedQuestions.value = response.data[0].result.questions || []

@@ -209,7 +209,7 @@ const fetchSelfIntro = async () => {
     const introType = `${selectedVersion.value}_${selectedStyle.value}`
     
     // 调用后端API获取对应的自我介绍数据
-    const response = await axios.post('http://127.0.0.1:5000/api/self-intro/get', {
+    const response = await axios.post('/api/self-intro/get', {
       userId: userId,
       introType: introType
     })
@@ -267,7 +267,7 @@ const generateIntro = () => {
   }
   
   // 调用后端API，只传递userId，不传递resumeId
-  axios.post('http://127.0.0.1:5000/api/self-intro/generate', {
+  axios.post('/api/self-intro/generate', {
     version: selectedVersion.value,
     style: selectedStyle.value,
     userId: userId

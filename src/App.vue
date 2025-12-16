@@ -88,7 +88,7 @@ onUnmounted(() => {
         <div class="navbar-header">
           <div class="navbar-brand">
             <router-link to="/" class="brand-link">
-              <div class="brand-icon">🤖</div>
+              <img src="/logo.svg" alt="AI智能面试宝典" class="brand-icon" />
               <span class="brand-name">AI智能面试宝典</span>
             </router-link>
           </div>
@@ -109,7 +109,7 @@ onUnmounted(() => {
     <div class="mobile-top-brand">
       <div class="brand-content">
         <router-link to="/" class="brand-link">
-          <div class="brand-icon">🤖</div>
+          <img src="/logo.svg" alt="AI智能面试宝典" class="brand-icon" />
           <span class="brand-name">AI智能面试宝典</span>
         </router-link>
       </div>
@@ -541,8 +541,10 @@ p, span, div {
 }
 
 .brand-icon {
-  font-size: 2rem !important;
+  width: 40px !important;
+  height: 40px !important;
   background-color: transparent !important;
+  object-fit: contain;
 }
 
 .brand-name {
@@ -550,9 +552,10 @@ p, span, div {
   color: var(--color-primary) !important;
   background-color: transparent !important;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 180px;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: none;
+  flex-shrink: 0;
 }
 
 .navbar-menu {
@@ -646,7 +649,9 @@ p, span, div {
   
   .brand-name {
     font-size: 1.3rem !important;
-    max-width: 150px;
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
   }
   
   .brand-icon {
@@ -679,11 +684,13 @@ p, span, div {
 }
 
 /* 小屏幕手机优化 */
-@media (max-width: 375px) {
-  .brand-name {
-    font-size: 1.1rem !important;
-    max-width: 120px;
-  }
+  @media (max-width: 375px) {
+    .brand-name {
+      font-size: 1.1rem !important;
+      max-width: none;
+      overflow: visible;
+      text-overflow: clip;
+    }
   
   .brand-icon {
     font-size: 1.5rem !important;

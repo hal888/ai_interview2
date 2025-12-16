@@ -172,7 +172,7 @@ const fetchQuestionBank = async () => {
     if (!userId) return
     
     // 调用后端API获取已生成的题库数据，不传递resumeId参数
-    const response = await axios.post('http://127.0.0.1:5000/api/question-bank/get', {
+    const response = await axios.post('/api/question-bank/get', {
       userId: userId,
       count: selectedCount.value  // 传递选择的题目数量
     })
@@ -227,7 +227,7 @@ const generateQuestions = () => {
   console.log('userId:', userId)
   
   // 调用后端API，不传递resumeId参数
-  axios.post('http://127.0.0.1:5000/api/question-bank/generate', {
+  axios.post('/api/question-bank/generate', {
     count: selectedCount.value,
     topic: customTopic.value,
     userId: userId

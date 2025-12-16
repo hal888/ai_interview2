@@ -9,7 +9,14 @@ export default defineConfig({
       'localhost',
       '127.0.0.1',
       '255b32d2.r25.cpolar.top'
-    ]
+    ],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   }
 })
 

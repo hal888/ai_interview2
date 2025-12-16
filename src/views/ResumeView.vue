@@ -15,11 +15,11 @@
       <div class="upload-card">
         <div class="upload-icon"></div>
         <h2>上传您的简历</h2>
-        <p>支持 PDF、DOCX、JPG/PNG 格式，单文件 ≤ 10MB</p>
+        <p>支持 PDF 格式，单文件 ≤ 10MB</p>
         
         <div class="upload-options">
           <div class="file-input-container">
-            <input ref="fileInputGeneric" type="file" id="resume-file" accept=".pdf,.docx,.jpg,.jpeg,.png" @change="handleFileUpload" :disabled="isUploading" />
+            <input ref="fileInputGeneric" type="file" id="resume-file" accept=".pdf" @change="handleFileUpload" :disabled="isUploading" />
             <input ref="fileInputCamera" type="file" accept="image/*" capture="environment" @change="handleFileUpload" style="display:none" />
             <input ref="fileInputGallery" type="file" accept="image/*" @change="handleFileUpload" style="display:none" />
             <button class="file-input-label" :class="{ 'disabled': isUploading }" @click="openUploadModal">
@@ -141,19 +141,12 @@
           <button class="upload-modal-close" @click="hideUploadModal">✕</button>
         </div>
         <div class="upload-options-grid">
-          <div class="upload-option" @click="openCamera">
-            <div class="upload-option-icon">📷</div>
-            <div>相机</div>
-          </div>
-          <div class="upload-option" @click="openGallery">
-            <div class="upload-option-icon">🖼️</div>
-            <div>相册</div>
-          </div>
           <div class="upload-option" @click="openFiles">
             <div class="upload-option-icon">📁</div>
             <div>文件</div>
           </div>
         </div>
+       
         <div class="recent-files-header">
           <div>最近文件</div>
           <div class="recent-files-actions">
@@ -161,18 +154,32 @@
           </div>
         </div>
         <div class="recent-files-list">
-          <div v-if="recentFilesLoading">加载中...</div>
-          <div v-else-if="recentFilesError">{{ recentFilesError }}</div>
-          <div v-else>
-            <div v-for="item in recentFiles" :key="item.id" class="recent-file-item" @click="handleRecentFileClick(item)">
-              <div class="file-type-icon" :class="fileTypeClass(item)">{{ fileTypeLabel(item) }}</div>
-              <div class="recent-file-meta">
-                <div class="recent-file-name">{{ item.name }}</div>
-                <div class="recent-file-time">{{ formatTime(item.lastModified) }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
+  <div v-if="recentFilesLoading" class="recent-files-loading">
+    <div class="loading-dots">
+      <span class="loading-dot"></span>
+      <span class="loading-dot"></span>
+      <span class="loading-dot"></span>
+    </div>
+    <span>加载最近文件中...</span>
+  </div>
+  <div v-else-if="recentFilesError" class="recent-files-error">
+    <span class="error-icon">⚠️</span>
+    <span>{{ recentFilesError }}</span>
+  </div>
+  <div v-else-if="recentFiles.length === 0" class="recent-files-empty">
+    <span class="empty-icon">📁</span>
+    <span>暂无最近文件</span>
+  </div>
+  <div v-else>
+    <div v-for="item in recentFiles" :key="item.id" class="recent-file-item" @click="handleRecentFileClick(item)">
+      <div class="file-type-icon" :class="fileTypeClass(item)">{{ fileTypeLabel(item) }}</div>
+      <div class="recent-file-meta">
+        <div class="recent-file-name">{{ item.name }}</div>
+        <div class="recent-file-time">{{ formatTime(item.lastModified) }}</div>
+      </div>
+    </div>
+  </div>
+</div>
       </div>
     </div>
   </div>
@@ -209,8 +216,8 @@ onMounted(async () => {
       localStorage.setItem('userId', userId)
     }
     
-    // 调用后端API获取最新的简历数据
-    const response = await axios.post('http://localhost:5000/api/resume/get', {
+    // 调用后端API获取最新的简历数据，使用相对路径，自动适配不同环境
+    const response = await axios.post('/api/resume/get', {
       userId: userId
     })
     
@@ -246,6 +253,12 @@ const handleDragDrop = (event) => {
 }
 
 const uploadResume = (file) => {
+  // 验证文件类型，只接受PDF文件
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    alert('只支持PDF格式文件，请重新选择')
+    return
+  }
+  
   isUploading.value = true
   
   // 从localStorage获取userId，如果没有则生成一个新的
@@ -260,8 +273,8 @@ const uploadResume = (file) => {
   formData.append('file', file)
   formData.append('userId', userId) // 添加userId到请求中
   
-  // 调用后端API
-  axios.post('http://localhost:5000/api/resume/analyze', formData, {
+  // 调用后端API，使用相对路径，自动适配不同环境
+  axios.post('/api/resume/analyze', formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     }
@@ -287,6 +300,7 @@ const uploadResume = (file) => {
 }
 
 const openUploadModal = () => {
+  
   showUploadModal.value = true
 }
 
@@ -307,31 +321,13 @@ const openGallery = () => {
 const openFiles = async () => {
   if (isUploading.value) return
   try {
-    if (window.showOpenFilePicker) {
-      const handles = await window.showOpenFilePicker({
-        multiple: false,
-        types: [
-          {
-            description: 'Documents',
-            accept: {
-              'application/pdf': ['.pdf'],
-              'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-              'image/*': ['.png', '.jpg', '.jpeg']
-            }
-          }
-        ]
-      })
-      if (handles && handles.length > 0) {
-        const file = await handles[0].getFile()
-        uploadResume(file)
-        saveRecentFile(file)
-        hideUploadModal()
-      }
-    } else if (fileInputGeneric.value) {
+    // 直接使用系统文件选择器，确保在微信浏览器中也能正常工作
+    if (fileInputGeneric.value) {
       fileInputGeneric.value.click()
     }
   } catch (e) {
-    recentFilesError.value = '无法打开文件选择器'
+    console.error('文件选择器打开失败:', e)
+    recentFilesError.value = '无法打开文件选择器，请重试'
   }
 }
 
@@ -345,7 +341,8 @@ const initDB = () => {
     request.onupgradeneeded = (event) => {
       const db = event.target.result
       if (!db.objectStoreNames.contains('recentFiles')) {
-        db.createObjectStore('recentFiles', { keyPath: 'id', autoIncrement: true })
+        const store = db.createObjectStore('recentFiles', { keyPath: 'id', autoIncrement: true })
+        store.createIndex('lastModified', 'lastModified', { unique: false })
       }
     }
     request.onsuccess = () => resolve(request.result)
@@ -355,69 +352,117 @@ const initDB = () => {
 
 const saveRecentFile = async (file) => {
   try {
+    // 先检查浏览器是否支持IndexedDB
+    if (!window.indexedDB) {
+      console.log('浏览器不支持IndexedDB，无法保存最近文件')
+      return
+    }
+    
     const db = await initDB()
     const tx = db.transaction('recentFiles', 'readwrite')
     const store = tx.objectStore('recentFiles')
-    const record = {
-      name: file.name,
-      type: file.type,
-      lastModified: file.lastModified || Date.now(),
-      blob: file
+    
+    // 获取所有现有文件
+    const getAllReq = store.getAll()
+    getAllReq.onsuccess = () => {
+      const existingFiles = getAllReq.result || []
+      const existingFileIndex = existingFiles.findIndex(item => item.name === file.name)
+      
+      const record = {
+        name: file.name,
+        type: file.type,
+        lastModified: file.lastModified || Date.now()
+      }
+      
+      if (existingFileIndex >= 0) {
+        // 如果文件已存在，更新它
+        store.put({ ...existingFiles[existingFileIndex], ...record })
+      } else {
+        // 如果文件不存在，添加新文件
+        store.add(record)
+        
+        // 如果超过10个文件，删除最旧的
+        if (existingFiles.length >= 10) {
+          const oldestFile = existingFiles.reduce((oldest, current) => {
+            return (oldest.lastModified || 0) < (current.lastModified || 0) ? oldest : current
+          })
+          store.delete(oldestFile.id)
+        }
+      }
     }
-    store.add(record)
+    
     tx.oncomplete = () => {
       db.close()
       loadRecentFiles()
     }
-  } catch (_) {}
+    
+    tx.onerror = () => {
+      db.close()
+      console.error('保存最近文件失败')
+    }
+  } catch (error) {
+    console.error('保存最近文件失败:', error)
+  }
 }
 
 const loadRecentFiles = async () => {
   recentFilesLoading.value = true
   recentFilesError.value = ''
+  recentFiles.value = []
+  
   try {
+    // 先检查浏览器是否支持IndexedDB
+    if (!window.indexedDB) {
+      recentFilesLoading.value = false
+      recentFilesError.value = ''
+      recentFiles.value = []
+      console.log('浏览器不支持IndexedDB，无法加载最近文件')
+      return
+    }
+    
     const db = await initDB()
     const tx = db.transaction('recentFiles', 'readonly')
     const store = tx.objectStore('recentFiles')
     const req = store.getAll()
+    
     req.onsuccess = () => {
       const items = (req.result || [])
         .sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0))
         .slice(0, 10)
       recentFiles.value = items
-      db.close()
       recentFilesLoading.value = false
+      recentFilesError.value = ''
     }
+    
     req.onerror = () => {
       recentFilesLoading.value = false
-      recentFilesError.value = '读取最近文件失败'
-      db.close()
+      recentFilesError.value = '读取最近文件失败，请稍后重试'
+      recentFiles.value = []
+      console.error('读取最近文件失败')
     }
-  } catch (e) {
+    
+    tx.oncomplete = () => db.close()
+    tx.onerror = () => db.close()
+  } catch (error) {
     recentFilesLoading.value = false
-    recentFilesError.value = '不支持最近文件读取'
+    recentFilesError.value = ''
+    recentFiles.value = []
+    console.error('加载最近文件失败:', error)
   }
 }
 
-const handleRecentFileClick = async (item) => {
-  try {
-    const file = new File([item.blob], item.name, { type: item.type, lastModified: item.lastModified })
-    uploadResume(file)
-    hideUploadModal()
-  } catch (_) {}
+const handleRecentFileClick = (item) => {
+  // 直接使用系统文件选择器，让用户重新选择文件
+  openSystemFilePicker()
 }
 
 const fileTypeClass = (item) => {
-  if ((item.type || '').includes('pdf')) return 'icon-pdf'
-  if ((item.type || '').includes('word') || item.name.endsWith('.docx')) return 'icon-docx'
-  if ((item.type || '').startsWith('image/')) return 'icon-img'
-  return 'icon-docx'
+  if ((item.type || '').includes('pdf') || item.name.endsWith('.pdf')) return 'icon-pdf'
+  return 'icon-pdf'
 }
 
 const fileTypeLabel = (item) => {
-  if ((item.type || '').includes('pdf')) return 'PDF'
-  if ((item.type || '').includes('word') || item.name.endsWith('.docx')) return 'DOCX'
-  if ((item.type || '').startsWith('image/')) return 'IMG'
+  if ((item.type || '').includes('pdf') || item.name.endsWith('.pdf')) return 'PDF'
   return 'FILE'
 }
 
@@ -551,6 +596,10 @@ const downloadResume = async () => {
   margin-bottom: 30px;
   color: #333;
   text-align: center;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.2;
+  padding: 0 10px;
 }
 
 .resume-upload-section {
@@ -603,6 +652,11 @@ const downloadResume = async () => {
 
 #resume-file {
   display: none;
+}
+
+/* 确保其他文件输入元素也能正常工作 */
+input[type="file"] {
+  cursor: pointer;
 }
 
 .file-input-label {
@@ -1428,7 +1482,15 @@ const downloadResume = async () => {
   }
   
   .resume-container h1 {
-    font-size: 2rem;
+    font-size: 1.8rem;
+  }
+  
+  /* 针对小屏手机的进一步优化 */
+  @media (max-width: 428px) {
+    .resume-container h1 {
+      font-size: 1.6rem;
+      margin-bottom: 20px;
+    }
   }
   
   .upload-card {
@@ -1658,10 +1720,190 @@ const downloadResume = async () => {
   border-radius: 8px;
   background: #fff;
   cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
 }
 
+.browse-btn:hover {
+  background-color: #f5f5f5;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* 微信浏览器提示样式 */
+.wechat-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background-color: #f0f8ff;
+  border-radius: 8px;
+  margin: 10px 0;
+  font-size: 0.85rem;
+  color: #333;
+  border: 1px solid #e0f0ff;
+}
+
+.tip-icon {
+  font-size: 1rem;
+}
+
+/* 最近文件列表优化 */
+.recent-files-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.loading-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.loading-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #667eea;
+  animation: loading 1.4s infinite ease-in-out both;
+}
+
+.loading-dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.loading-dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes loading {
+  0%, 80%, 100% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.recent-files-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  color: #e74c3c;
+  font-size: 0.9rem;
+  background-color: #fff5f5;
+  border-radius: 8px;
+  border: 1px solid #ffebee;
+}
+
+.error-icon {
+  font-size: 1rem;
+}
+
+.recent-files-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 30px 20px;
+  color: #999;
+  font-size: 0.95rem;
+}
+
+.empty-icon {
+  font-size: 1.2rem;
+}
+
+/* 最近文件项优化 */
+.recent-file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background-color: #fff;
+}
+
+.recent-file-item:hover {
+  background-color: #fafafa;
+  border-color: #e0e0e0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.recent-file-item:active {
+  transform: scale(0.98);
+  background-color: #f5f5f5;
+}
+
+.recent-file-name {
+  font-weight: 500;
+  color: #333;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.recent-file-time {
+  font-size: 0.8rem;
+  color: #999;
+}
+
+/* 移动端适配优化 */
 @media (max-width: 428px) {
   .upload-options-grid { gap: 10px; }
   .upload-option { padding: 12px 8px; }
+  
+  .recent-file-name {
+    max-width: 150px;
+    font-size: 0.9rem;
+  }
+  
+  .recent-file-time {
+    font-size: 0.75rem;
+  }
+  
+  .recent-files-list {
+    max-height: 200px;
+  }
+  
+  .browse-btn {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+  }
+  
+  .recent-file-item {
+    padding: 10px;
+    gap: 10px;
+  }
+  
+  .file-type-icon {
+    width: 24px;
+    height: 24px;
+    font-size: 0.8rem;
+  }
+  
+  .recent-files-header {
+    font-size: 0.95rem;
+  }
+}
+
+/* 平板设备适配 */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .recent-file-name {
+    max-width: 250px;
+  }
 }
 </style>
