@@ -142,7 +142,7 @@ onUnmounted(() => {
 /* Navigation Bar - 全局一致样式 */
 .navbar {
   background-color: var(--color-bg) !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 2px 20px rgba(102, 126, 234, 0.15) !important;
   position: sticky !important;
   top: 0 !important;
   z-index: 1000 !important;
@@ -151,11 +151,12 @@ onUnmounted(() => {
   padding: 0 !important;
   transition: all 0.3s ease !important;
   transform: translateY(0);
-  backdrop-filter: blur(10px);
-  background-color: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(15px) saturate(110%);
+  background-color: rgba(255, 255, 255, 0.98) !important;
   /* 确保导航栏层级正确 */
   will-change: transform;
   overflow: hidden;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
 }
 
 /* 导航栏隐藏状态 */
@@ -252,14 +253,16 @@ onUnmounted(() => {
 /* 移动端顶部品牌 */
 .mobile-top-brand {
   display: none;
-  background-color: #ffffff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background-color: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 2px 20px rgba(102, 126, 234, 0.15);
   padding: 15px 0;
   position: sticky;
   top: 0;
   z-index: 1000;
   transition: all 0.3s ease;
   padding-top: env(safe-area-inset-top);
+  backdrop-filter: blur(15px) saturate(110%);
+  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
 }
 
 /* 品牌内容容器 */
@@ -347,39 +350,63 @@ onUnmounted(() => {
     align-items: center;
     justify-content: center;
     flex: 1;
-    padding: 10px 5px;
+    padding: 12px 8px;
     text-align: center;
     font-size: 0.8rem !important;
     font-weight: 500 !important;
     min-width: 0;
     border: none !important;
-    gap: 4px;
+    gap: 6px;
     color: var(--color-text-secondary) !important;
-    transition: all 0.2s ease;
-    border-radius: 8px;
+    transition: all 0.3s ease !important;
+    border-radius: 12px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    background-color: transparent;
+    position: relative;
   }
   
   /* 移动端导航链接悬停效果 */
   .mobile-navbar .nav-link:hover {
-    background-color: #f5f5f5;
+    background-color: rgba(102, 126, 234, 0.08) !important;
     color: var(--color-primary) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15) !important;
   }
   
   /* 移动端导航链接激活状态 */
   .mobile-navbar .nav-link.active {
     color: var(--color-primary) !important;
     font-weight: 600 !important;
+    background-color: rgba(102, 126, 234, 0.1) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15) !important;
   }
   
-  /* 调整激活状态下划线位置 */
+  /* 移除旧的下划线样式 */
   .mobile-navbar .nav-link.active::after {
-    bottom: 6px !important;
-    height: 2px !important;
+    content: none !important;
+  }
+  
+  /* 移动端导航链接顶部装饰条 */
+  .mobile-navbar .nav-link::before {
+    content: '' !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: 0 !important;
+    height: 3px !important;
     background-color: var(--color-primary) !important;
-    border-radius: 2px !important;
+    border-radius: 3px !important;
+    transition: all 0.3s ease !important;
+  }
+  
+  /* 移动端导航链接悬停和激活状态的顶部装饰条 */
+  .mobile-navbar .nav-link:hover::before,
+  .mobile-navbar .nav-link.active::before {
+    width: 60% !important;
   }
   
   /* 调整主内容区，避免被底部导航遮挡 */
@@ -421,12 +448,46 @@ onUnmounted(() => {
   font-weight: bold !important;
   background-color: transparent !important;
   flex-shrink: 0;
+  transition: all 0.3s ease !important;
+  padding: 8px 12px !important;
+  border-radius: 12px !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.brand-link::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 12px;
 }
 
 .brand-link:hover {
-  color: #333 !important;
+  color: var(--color-primary) !important;
   text-decoration: none !important;
   background-color: transparent !important;
+  transform: translateY(-2px) scale(1.02) !important;
+}
+
+.brand-link:hover::before {
+  opacity: 1;
+}
+
+.brand-link:hover .brand-name {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.brand-link:hover .brand-icon {
+  transform: scale(1.1) rotate(5deg);
 }
 
 .brand-icon {
@@ -434,6 +495,9 @@ onUnmounted(() => {
   height: 40px !important;
   background-color: transparent !important;
   object-fit: contain;
+  transition: all 0.3s ease !important;
+  position: relative;
+  z-index: 1;
 }
 
 .brand-name {
@@ -445,6 +509,12 @@ onUnmounted(() => {
   text-overflow: clip;
   max-width: none;
   flex-shrink: 0;
+  font-weight: 700 !important;
+  transition: all 0.3s ease !important;
+  position: relative;
+  z-index: 1;
+  letter-spacing: 0.5px;
+  text-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);
 }
 
 .navbar-menu {
