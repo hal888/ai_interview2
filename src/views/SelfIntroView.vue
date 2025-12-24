@@ -162,7 +162,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import apiClient from '@/utils/api.js'
 
 const router = useRouter()
 
@@ -209,7 +209,7 @@ const fetchSelfIntro = async () => {
     const introType = `${selectedVersion.value}_${selectedStyle.value}`
     
     // 调用后端API获取对应的自我介绍数据
-    const response = await axios.post('/api/self-intro/get', {
+    const response = await apiClient.post('/self-intro/get', {
       userId: userId,
       introType: introType
     })
@@ -267,7 +267,7 @@ const generateIntro = () => {
   }
   
   // 调用后端API，只传递userId，不传递resumeId
-  axios.post('/api/self-intro/generate', {
+  apiClient.post('/self-intro/generate', {
     version: selectedVersion.value,
     style: selectedStyle.value,
     userId: userId

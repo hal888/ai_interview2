@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, jsonify
 from flask_cors import CORS
 import os
 
@@ -26,7 +26,7 @@ from .models import db
 db.init_app(app)
 
 # 导入路由
-from .routes import resume, self_intro, question_bank, mock_interview, strategy
+from .routes import resume, self_intro, question_bank, mock_interview, strategy, auth
 
 # 注册蓝图
 app.register_blueprint(resume)
@@ -34,6 +34,21 @@ app.register_blueprint(self_intro)
 app.register_blueprint(question_bank)
 app.register_blueprint(mock_interview)
 app.register_blueprint(strategy)
+app.register_blueprint(auth)
 
-if __name__ == '__main__':
-    app.run(debug=False, port=5000)
+# 初始化数据库
+with app.app_context():
+    db.create_all()
+
+# 添加调试路由，用于列出所有注册的路由
+@app.route('/api/routes', methods=['GET'])
+def list_routes():
+    """列出所有注册的路由"""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods),
+            'rule': rule.rule
+        })
+    return jsonify({'routes': routes}), 200

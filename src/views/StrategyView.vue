@@ -223,7 +223,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import apiClient from '@/utils/api.js'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 
@@ -251,7 +251,7 @@ const generateAnalysis = () => {
   const userId = getUserId()
   
   // 调用后端API
-  axios.post('/api/strategy/analysis', {
+  apiClient.post('/strategy/analysis', {
     backgroundInfo: backgroundInfo.value,
     directions: selectedDirections.value,
     userId: userId
@@ -282,7 +282,7 @@ const generateQuestions = () => {
   const userId = getUserId()
   
   // 调用后端API
-  axios.post('/api/strategy/questions', {
+  apiClient.post('/strategy/questions', {
     companyName: companyInfo.value.companyName,
     position: companyInfo.value.position,
     questionTypes: selectedQuestionTypes.value,
@@ -321,7 +321,7 @@ const fetchAnalysisHistory = async () => {
   const userId = getUserId()
   
   try {
-    const response = await axios.get(`/api/strategy/analysis/history?userId=${userId}`)
+    const response = await apiClient.get(`/strategy/analysis/history`)
     if (response.data && response.data.length > 0) {
       // 使用最新的分析结果
       analysisResult.value = response.data[0].result
@@ -342,7 +342,7 @@ const fetchQuestionsHistory = async () => {
   const userId = getUserId()
   
   try {
-    const response = await axios.get(`/api/strategy/questions/history?userId=${userId}`)
+    const response = await apiClient.get(`/strategy/questions/history`)
     if (response.data && response.data.length > 0) {
       // 使用最新的问题结果
       generatedQuestions.value = response.data[0].result.questions || []

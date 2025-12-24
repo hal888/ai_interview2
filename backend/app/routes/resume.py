@@ -4,12 +4,14 @@ from ..services.file_service import read_file_content, save_resume
 from ..services.deepseek_service import analyze_resume
 from ..utils.json_parser import parse_resume_result
 from ..models import db, User, Resume
+from ..utils.jwt_utils import auth_required
 import uuid
 
 # 创建蓝图
 bp = Blueprint('resume', __name__, url_prefix='/api/resume')
 
 @bp.route('/analyze', methods=['POST'])
+@auth_required
 def analyze():
     """简历分析API"""
     # 打印请求参数
@@ -23,8 +25,8 @@ def analyze():
     if file.filename == '':
         return jsonify({"error": "No file selected"}), 400
     
-    # 获取user_id（前端从localStorage传递）
-    user_id = request.form.get('userId') or str(uuid.uuid4())
+    # 从认证中间件获取user_id
+    user_id = request.user_id
     
     # 获取文件信息
     filename = file.filename
@@ -119,11 +121,13 @@ def analyze():
     return jsonify(analysis_result), 200
 
 @bp.route('/get', methods=['POST'])
+@auth_required
 def get_resume():
     """获取已生成的简历数据"""
     data = request.get_json()
-    user_id = data.get('userId')
     resume_id = data.get('resumeId')
+    # 从request对象中获取用户ID，这是auth_required装饰器设置的
+    user_id = request.user_id
     
     # 打印请求参数
     print(f"[API LOG] /api/resume/get - Request received: userId={user_id}, resumeId={resume_id}")

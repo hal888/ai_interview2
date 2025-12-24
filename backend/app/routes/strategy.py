@@ -3,11 +3,13 @@ import json
 from ..services.deepseek_service import client
 from ..services.file_service import get_resume_content
 from ..models import db, User, InterviewStrategy
+from ..utils.jwt_utils import auth_required
 
 # 创建蓝图
 bp = Blueprint('strategy', __name__, url_prefix='/api/strategy')
 
 @bp.route('/analysis', methods=['POST'])
+@auth_required
 def analysis():
     """生成画像分析API"""
     data = request.get_json()
@@ -186,9 +188,10 @@ def analysis():
         return jsonify(result), 200
 
 @bp.route('/analysis/history', methods=['GET'])
+@auth_required
 def get_analysis_history():
     """获取用户的策略分析历史记录API"""
-    user_id = request.args.get('userId', 'default_user')
+    user_id = request.user_id
     
     # 打印请求参数
     print(f"[API LOG] /api/strategy/analysis/history - Request received: userId={user_id}")
@@ -223,13 +226,15 @@ def get_analysis_history():
         return jsonify({"error": "Failed to get analysis history"}), 500
 
 @bp.route('/questions', methods=['POST'])
+@auth_required
 def questions():
     """生成反问环节问题API"""
     data = request.get_json()
     company_name = data.get('companyName', '')
     position = data.get('position', '')
     question_types = data.get('questionTypes', [])
-    user_id = data.get('userId', 'default_user')
+    # 从request对象中获取用户ID，这是auth_required装饰器设置的
+    user_id = request.user_id
     
     # 根据userId获取最新的resumeId
     resume_id = '1'  # 默认值
@@ -424,9 +429,11 @@ def questions():
         return jsonify(result), 200
 
 @bp.route('/questions/history', methods=['GET'])
+@auth_required
 def get_questions_history():
     """获取用户的反问问题历史记录API"""
-    user_id = request.args.get('userId', 'default_user')
+    # 从request对象中获取用户ID，这是auth_required装饰器设置的
+    user_id = request.user_id
     
     # 打印请求参数
     print(f"[API LOG] /api/strategy/questions/history - Request received: userId={user_id}")

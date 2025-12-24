@@ -1,15 +1,18 @@
 from flask import Blueprint, request, jsonify
+import os
 from ..services.deepseek_service import client
 from ..services.file_service import get_resume_content
 from ..models import db, User, QuestionBank
+from ..utils.jwt_utils import auth_required
 import uuid
 
 # 创建蓝图
 bp = Blueprint('question_bank', __name__, url_prefix='/api/question-bank')
 
 @bp.route('/generate', methods=['POST'])
+@auth_required
 def generate():
-    """基于简历内容生成智能题库API"""
+    """"基于简历内容生成智能题库API"""""
     data = request.get_json()
     count = data.get('count', 10)  # 默认生成10个问题
     topic = data.get('topic', '')
@@ -187,10 +190,12 @@ def generate():
         return jsonify({"error": "生成题库失败，请重试"}), 500
 
 @bp.route('/get', methods=['POST'])
+@auth_required
 def get_question_bank():
     """获取已生成的智能题库数据"""
     data = request.get_json()
-    user_id = data.get('userId')
+    # 从request对象中获取用户ID，这是auth_required装饰器设置的
+    user_id = request.user_id
     resume_id = data.get('resumeId')  # 允许为空
     count = data.get('count')  # 新增：获取题目数量筛选条件
     

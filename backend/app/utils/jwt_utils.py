@@ -1,0 +1,50 @@
+import jwt
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
+import datetime
+import os
+from functools import wraps
+from flask import request, jsonify
+
+class JWTUtil:
+    @staticmethod
+    def generate_token(user_id):
+        payload = {
+            'user_id': user_id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
+        }
+        return jwt.encode(payload, os.getenv('JWT_SECRET_KEY', 'default_secret_key_override_in_production'), algorithm='HS256')
+    
+    @staticmethod
+    def verify_token(token):
+        try:
+            payload = jwt.decode(
+                token,
+                os.getenv('JWT_SECRET_KEY', 'default_secret_key_override_in_production'),
+                algorithms=['HS256']
+            )
+            return payload['user_id']
+        except ExpiredSignatureError:
+            return None
+        except InvalidTokenError:
+            return None
+
+def auth_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'error': 'Missing authorization header'}), 401
+        
+        if not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Invalid authorization header format'}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_id = JWTUtil.verify_token(token)
+        
+        if not user_id:
+            return jsonify({'error': 'Invalid or expired token'}), 401
+        
+        # Attach user_id to request for downstream use
+        request.user_id = user_id
+        return f(*args, **kwargs)
+    return decorated

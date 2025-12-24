@@ -263,7 +263,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import apiClient from '@/utils/api.js'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 
@@ -347,7 +347,7 @@ const startInterviewProcess = async () => {
   
   try {
     // 调用后端API开始面试
-    const response = await axios.post('/api/mock-interview/start', {
+    const response = await apiClient.post('/mock-interview/start', {
       userId: userId,
       style: selectedStyle.value,
       duration: selectedDuration.value
@@ -402,7 +402,7 @@ const endInterview = () => {
   const userId = localStorage.getItem('userId') || ''
   
   // 调用后端API结束面试，获取报告
-  axios.post('/api/mock-interview/end', {
+  apiClient.post('/mock-interview/end', {
     interviewId: interviewId.value,
     userId: userId,
     style: selectedStyle.value,
@@ -453,7 +453,7 @@ const sendMessage = () => {
   scrollToBottom()
   
   // 调用后端API回答问题
-  axios.post('/api/mock-interview/answer', {
+  apiClient.post('/mock-interview/answer', {
     interviewId: interviewId.value,
     questionId: currentQuestion.value,
     answer: userAnswer
@@ -645,22 +645,27 @@ const initSpeechRecognition = () => {
     // 如果用户仍在录音状态，立即重新开始识别，确保连续录音
     if (isRecording.value) {
       realTimeTips.value.push('📝 录音片段已转换为文字，继续录音中...')
-      // 立即重新开始识别，不延迟，确保实时性
+      // 延迟重新开始识别，避免频繁重启导致的问题
       try {
-        // 添加防抖动机制，避免频繁重启
-        if (!isRecognitionStarting) {
-          isRecognitionStarting = true
-          recognition.start()
-          recordingStatus.value = 'recording'
-          isRecognitionRunning = true
-          isRecognitionStarting = false
-        }
+        setTimeout(() => {
+          if (isRecording.value) {
+            // 重新初始化recognition实例，避免状态混乱
+            initSpeechRecognition()
+            isRecognitionStarting = true
+            recognition.start()
+            recordingStatus.value = 'recording'
+            isRecognitionRunning = true
+            isRecognitionStarting = false
+          }
+        }, 500) // 添加500ms延迟，避免频繁重启
       } catch (error) {
         console.error('自动重新开始识别失败:', error)
         recordingStatus.value = 'idle'
         isRecording.value = false
         realTimeTips.value.push('❌ 录音已停止，请重试')
         isRecognitionStarting = false
+        // 重新初始化recognition实例
+        initSpeechRecognition()
       }
     } else {
       // 录音已停止，显示录音完成
@@ -669,13 +674,15 @@ const initSpeechRecognition = () => {
       // 重置状态
       setTimeout(() => {
         recordingStatus.value = 'idle'
+        // 重新初始化recognition实例
+        initSpeechRecognition()
       }, 1000)
     }
   }
 }
 
 // 在组件挂载时初始化语音识别
-onMounted(() => {
+onMounted(async () => {
   realTimeTips.value = [
     '保持微笑，展现自信',
     '回答问题时保持逻辑清晰',
@@ -690,6 +697,27 @@ onMounted(() => {
   
   // 初始化语音识别
   initSpeechRecognition()
+  
+  // 在组件挂载时请求麦克风权限，避免每次录音都请求
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 44100,
+        sampleSize: 16,
+        channelCount: 1
+      } 
+    })
+    // 停止临时流，只是为了获取权限
+    stream.getTracks().forEach(track => track.stop())
+    console.log('麦克风权限已获取')
+  } catch (error) {
+    console.error('获取麦克风权限失败:', error)
+    isSpeechSupported.value = false
+    realTimeTips.value.push('获取麦克风权限失败，请在浏览器设置中允许麦克风访问')
+  }
 })
 
 // 组件卸载时停止语音识别
@@ -705,6 +733,13 @@ onUnmounted(() => {
 const toggleRecording = async () => {
   if (!isSpeechSupported.value) {
     alert('您的浏览器不支持语音识别功能，请使用Chrome或Edge等现代浏览器')
+    return
+  }
+  
+  // 添加防抖动机制，避免快速连续点击开始录音
+  // 只在开始录音时检查，停止录音操作不受限制
+  if (!isRecording.value && (isRecognitionStarting || isRecognitionRunning)) {
+    console.log('录音操作正在进行中，请稍候')
     return
   }
   
@@ -730,9 +765,11 @@ const toggleRecording = async () => {
       recordingStatus.value = 'completed'
       realTimeTips.value.push('✅ 录音已完成')
       
-      // 1秒后恢复空闲状态
+      // 1秒后恢复空闲状态，并重新初始化recognition实例
       setTimeout(() => {
         recordingStatus.value = 'idle'
+        // 重新初始化recognition实例，避免状态混乱
+        initSpeechRecognition()
       }, 1000)
     }, 500)
   } else {
@@ -742,22 +779,7 @@ const toggleRecording = async () => {
     realTimeTips.value.push('📤 正在准备录音...')
     
     try {
-      // 统一处理麦克风权限请求，适用于所有设备
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,    // 启用回声消除
-          noiseSuppression: true,    // 启用噪音抑制
-          autoGainControl: true,     // 启用自动增益控制
-          sampleRate: 44100,         // 设置标准采样率
-          sampleSize: 16,            // 设置采样位深
-          channelCount: 1            // 单声道，减少数据量
-        } 
-      })
-      
-      // 停止临时流，因为SpeechRecognition会自己请求流
-      stream.getTracks().forEach(track => track.stop())
-      
-      // 开始语音识别
+      // 不再每次都请求麦克风权限，直接开始语音识别
       console.log('开始语音识别...')
       isRecognitionStarting = true
       recognition.start()
@@ -790,6 +812,8 @@ const toggleRecording = async () => {
       isRecording.value = false
       isRecognitionStarting = false
       recordingStatus.value = 'idle'
+      // 遇到错误时，重新初始化recognition实例
+      initSpeechRecognition()
     }
   }
 }
@@ -908,7 +932,7 @@ const fetchMockInterviewHistory = async () => {
     if (!userId) return
     
     // 发送当前选择的style和duration参数
-    const response = await axios.get(`/api/mock-interview/history`, {
+    const response = await apiClient.get(`/mock-interview/history`, {
       params: {
         userId: userId,
         style: selectedStyle.value,

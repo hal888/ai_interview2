@@ -5,6 +5,7 @@ import json
 from ..services.deepseek_service import client
 from ..services.file_service import get_resume_content
 from ..models import db, User, MockInterview
+from ..utils.jwt_utils import auth_required
 
 # 创建蓝图
 bp = Blueprint('mock_interview', __name__, url_prefix='/api/mock-interview')
@@ -13,13 +14,15 @@ bp = Blueprint('mock_interview', __name__, url_prefix='/api/mock-interview')
 interview_sessions = {}
 
 @bp.route('/start', methods=['POST'])
+@auth_required
 def start():
     """开始模拟面试API"""
     data = request.get_json()
     style = data.get('style', '温柔HR')
     mode = data.get('mode', '文字模式')
     duration = data.get('duration', 15)
-    user_id = data.get('userId', 'default_user')
+    # 从request对象中获取用户ID，这是auth_required装饰器设置的
+    user_id = request.user_id
     
     # 打印请求参数
     print(f"[API LOG] /api/mock-interview/start - Request received: style={style}, mode={mode}, duration={duration}, userId={user_id}")
@@ -119,6 +122,7 @@ def start():
         }), 200
 
 @bp.route('/answer', methods=['POST'])
+@auth_required
 def answer():
     """回答问题API"""
     data = request.get_json()
@@ -206,11 +210,13 @@ def answer():
         return jsonify(result), 200
 
 @bp.route('/end', methods=['POST'])
+@auth_required
 def end():
     """结束模拟面试API"""
     data = request.get_json()
     interview_id = data.get('interviewId')
-    user_id = data.get('userId', 'default_user')
+    # 从request对象中获取用户ID，这是auth_required装饰器设置的
+    user_id = request.user_id
     
     # 打印请求参数
     print(f"[API LOG] /api/mock-interview/end - Request received: interviewId={interview_id}, userId={user_id}")
@@ -327,6 +333,7 @@ def end():
         return jsonify(report), 200
 
 @bp.route('/voice-answer', methods=['POST'])
+@auth_required
 def voice_answer():
     """语音回答API，处理用户语音输入"""
     try:
@@ -442,9 +449,11 @@ def voice_answer():
         return jsonify({"error": "语音回答处理失败"}), 500
 
 @bp.route('/history', methods=['GET'])
+@auth_required
 def get_history():
     """获取用户的模拟面试历史记录API"""
-    user_id = request.args.get('userId', 'default_user')
+    # 从request对象中获取用户ID，这是auth_required装饰器设置的
+    user_id = request.user_id
     style = request.args.get('style')
     mode = request.args.get('mode')
     duration = request.args.get('duration')
@@ -499,12 +508,14 @@ def get_history():
         return jsonify({"error": "Failed to get mock interview history"}), 500
 
 @bp.route('/save-report', methods=['POST'])
+@auth_required
 def save_report():
     """保存模拟面试报告API"""
     try:
         # 获取请求数据
         data = request.get_json()
-        user_id = data.get('userId')
+        # 从request对象中获取用户ID，这是auth_required装饰器设置的
+        user_id = request.user_id
         interview_id = data.get('interviewId')
         report_data = data.get('reportData')
         style = data.get('style')

@@ -192,7 +192,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'
+import apiClient from '@/utils/api.js'
 
 // 动态导入大型库，减少初始加载时间
 const loadLibraries = {
@@ -252,21 +252,15 @@ const fileInputGallery = ref(null)
 // 页面加载时自动获取最新的简历优化内容
 onMounted(async () => {
   try {
-    // 从localStorage获取userId和resumeId
-    let userId = localStorage.getItem('userId')
-    const resumeId = localStorage.getItem('resumeId')
-    
-    // 只有在用户有resumeId的情况下才调用API获取简历数据
-    if (resumeId) {
-      if (!userId) {
-        userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        localStorage.setItem('userId', userId)
-      }
-      
-      // 调用后端API获取最新的简历数据，使用相对路径，自动适配不同环境
-      const response = await axios.post('/api/resume/get', {
-        userId: userId
-      })
+        // 从localStorage获取resumeId
+        const resumeId = localStorage.getItem('resumeId')
+        
+        // 只有在用户有resumeId的情况下才调用API获取简历数据
+        if (resumeId) {
+            // 调用后端API获取最新的简历数据，使用相对路径，自动适配不同环境
+            const response = await apiClient.post('/resume/get', {
+                resumeId: resumeId
+            })
       
       // 如果返回了简历数据，填充到页面上
       if (response.data && response.data.optimizedResume) {
@@ -311,24 +305,12 @@ const uploadResume = (file) => {
   
   isUploading.value = true
   
-  // 从localStorage获取userId，如果没有则生成一个新的
-  let userId = localStorage.getItem('userId')
-  if (!userId) {
-    userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    localStorage.setItem('userId', userId)
-  }
-  
   // 创建FormData对象
   const formData = new FormData()
   formData.append('file', file)
-  formData.append('userId', userId) // 添加userId到请求中
   
   // 调用后端API，使用相对路径，自动适配不同环境
-  axios.post('/api/resume/analyze', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  })
+  apiClient.post('/resume/analyze', formData)
   .then(response => {
     resumeData.value = response.data
     // 保存resumeId到localStorage
