@@ -11,7 +11,7 @@ from PyPDF2 import PdfReader
 from config import DEEPSEEK_CONFIG
 
 app = Flask(__name__)
-CORS(app)  # 解决跨域问题
+CORS(app, origins=["https://interview.ailongdev.com", "http://localhost:5173"])
 
 # 配置DeepSeek API客户端
 client = OpenAI(

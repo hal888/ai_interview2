@@ -140,7 +140,7 @@
 - 示例修复：
   ```python
   from flask_cors import CORS
-  CORS(app, origins=["https://your-domain.com", "http://localhost:5173"])
+  CORS(app, origins=["https://interview.ailongdev.com", "http://localhost:5173"])
   ```
 
 ### 4.3 实现身份验证机制

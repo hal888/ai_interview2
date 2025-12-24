@@ -6,8 +6,7 @@ import os
 app = Flask(__name__)
 
 # 配置CORS
-CORS(app)
-
+CORS(app, origins=["https://interview.ailongdev.com", "http://localhost:5173"])
 # 设置项目根目录
 basedir = os.path.abspath(os.path.dirname(__file__))
 
