@@ -258,16 +258,53 @@
       </div>
     </div>
   </div>
+  
+  <!-- 错误提示组件 -->
+  <ErrorMessage 
+    :show="showError" 
+    :message="errorMessage" 
+    :title="errorTitle"
+    @close="closeError"
+  />
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import apiClient from '@/utils/api.js'
+import ErrorMessage from '@/components/ErrorMessage.vue'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 
 const router = useRouter()
+
+// 错误提示相关
+const showError = ref(false)
+const errorMessage = ref('')
+const errorTitle = ref('提示')
+// 错误提示关闭后的回调函数
+const errorCloseCallback = ref(null)
+
+// 显示错误信息
+const showErrorMessage = (message, title = '提示', callback = null) => {
+  errorMessage.value = message
+  errorTitle.value = title
+  errorCloseCallback.value = callback
+  showError.value = true
+}
+
+// 关闭错误信息
+const closeError = () => {
+  showError.value = false
+  errorMessage.value = ''
+  errorTitle.value = '提示'
+  // 执行回调函数
+  if (errorCloseCallback.value) {
+    const callback = errorCloseCallback.value
+    errorCloseCallback.value = null
+    callback()
+  }
+}
 
 const isInterviewStarted = ref(false)
 const isPaused = ref(false)
@@ -369,12 +406,17 @@ const startInterviewProcess = async () => {
     startTimer()
   } catch (error) {
     console.error('开始面试失败:', error)
-    // 检查是否是用户不存在的错误
-    if (error.response && error.response.data.error === 'User not found') {
-      alert('请先上传简历进行优化，然后再开始模拟面试')
-      router.push('/resume')
+    if (error.isUnauthorized) {
+      // 401错误，显示请先登录提示，点击确定后跳转到登录页
+      showErrorMessage('请先登录', '提示', () => {
+        router.push('/login')
+      })
+    } else if (error.response && error.response.data.error === 'User not found') {
+      showErrorMessage('请先上传简历进行优化，然后再开始模拟面试', '提示', () => {
+        router.push('/resume')
+      })
     } else {
-      alert('开始面试失败，请重试')
+      showErrorMessage('开始面试失败，请重试', '失败')
     }
   } finally {
     isLoading.value = false
@@ -417,7 +459,14 @@ const endInterview = () => {
   })
   .catch(error => {
     console.error('结束面试失败:', error)
-    alert('结束面试失败，请重试')
+    if (error.isUnauthorized) {
+      // 401错误，显示请先登录提示，点击确定后跳转到登录页
+      showErrorMessage('请先登录', '提示', () => {
+        router.push('/login')
+      })
+    } else {
+      showErrorMessage('结束面试失败，请重试', '失败')
+    }
   })
   .finally(() => {
     isLoading.value = false
@@ -478,7 +527,14 @@ const sendMessage = () => {
   })
   .catch(error => {
     console.error('回答问题失败:', error)
-    alert('回答问题失败，请重试')
+    if (error.isUnauthorized) {
+      // 401错误，显示请先登录提示，点击确定后跳转到登录页
+      showErrorMessage('请先登录', '提示', () => {
+        router.push('/login')
+      })
+    } else {
+      showErrorMessage('回答问题失败，请重试', '失败')
+    }
   })
   .finally(() => {
     isLoading.value = false
@@ -732,7 +788,7 @@ onUnmounted(() => {
 
 const toggleRecording = async () => {
   if (!isSpeechSupported.value) {
-    alert('您的浏览器不支持语音识别功能，请使用Chrome或Edge等现代浏览器')
+    showErrorMessage('您的浏览器不支持语音识别功能，请使用Chrome或Edge等现代浏览器', '提示')
     return
   }
   
@@ -791,7 +847,7 @@ const toggleRecording = async () => {
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
         errorMessage = '麦克风权限被拒绝，请在浏览器设置中允许麦克风访问'
         // 添加更明显的提示
-        alert('麦克风权限被拒绝，请在浏览器设置中允许麦克风访问后重试')
+        showErrorMessage('麦克风权限被拒绝，请在浏览器设置中允许麦克风访问后重试', '提示')
       } else if (error.name === 'NotFoundError' || error.message.includes('No device found')) {
         errorMessage = '未检测到麦克风设备，请连接麦克风后重试'
       } else if (error.name === 'NotReadableError') {
@@ -893,7 +949,7 @@ const saveReport = async () => {
     doc.save('面试复盘报告.pdf')
   } catch (error) {
     console.error('生成PDF失败:', error)
-    alert('生成PDF失败，请重试')
+    showErrorMessage('生成PDF失败，请重试', '失败')
   } finally {
     isLoading.value = false
   }
@@ -947,10 +1003,15 @@ const fetchMockInterviewHistory = async () => {
     checkAndLoadMatchingReport()
   } catch (error) {
     console.error('获取模拟面试历史记录失败:', error)
-    // 检查是否是用户不存在的错误
-    if (error.response && error.response.data.error === 'User not found') {
-      alert('请先上传简历进行优化，然后再开始模拟面试')
-      router.push('/resume')
+    if (error.isUnauthorized) {
+      // 401错误，显示请先登录提示，点击确定后跳转到登录页
+      showErrorMessage('请先登录', '提示', () => {
+        router.push('/login')
+      })
+    } else if (error.response && error.response.data.error === 'User not found') {
+      showErrorMessage('请先上传简历进行优化，然后再开始模拟面试', '提示', () => {
+        router.push('/resume')
+      })
     }
   }
 }

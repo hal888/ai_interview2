@@ -14,8 +14,10 @@ bp = Blueprint('resume', __name__, url_prefix='/api/resume')
 @auth_required
 def analyze():
     """简历分析API"""
-    # 打印请求参数
-    print(f"[API LOG] /api/resume/analyze - Request received: files={[f.filename for f in request.files.values()]}, form_data={dict(request.form)}")
+    # 从认证中间件获取user_id
+    user_id = request.user_id
+    # 打印请求参数user_id
+    print(f"[API LOG] /api/resume/analyze - Request received: user_id={user_id}, files={[f.filename for f in request.files.values()]}, form_data={dict(request.form)}")
     
     # 检查是否有文件上传
     if 'file' not in request.files:
@@ -25,8 +27,7 @@ def analyze():
     if file.filename == '':
         return jsonify({"error": "No file selected"}), 400
     
-    # 从认证中间件获取user_id
-    user_id = request.user_id
+    
     
     # 获取文件信息
     filename = file.filename
@@ -74,16 +75,16 @@ def analyze():
     # 保存到数据库，resume_id为统一生成的id（即优化后的简历id）
     try:
         # 查询或创建用户
-        user = User.query.filter_by(user_id=user_id).first()
-        if not user:
-            user = User(user_id=user_id)
-            db.session.add(user)
-            db.session.commit()  # 立即提交，获取user.id
+        # user = User.query.filter_by(user_id=user_id).first()
+        # if not user:
+        #     user = User(user_id=user_id)
+        #     db.session.add(user)
+        #     db.session.commit()  # 立即提交，获取user_id
         
         # 创建简历记录，resume_id为统一生成的id
         resume = Resume(
             resume_id=resume_id,
-            user_id=user.id,
+            user_id=user_id,
             original_content=file_content,
             optimized_content=parsed_result['optimizedResume'],
             score=parsed_result['score'],
@@ -137,17 +138,17 @@ def get_resume():
     
     try:
         # 查询用户
-        user = User.query.filter_by(user_id=user_id).first()
-        if not user:
-            return jsonify({"error": "User not found"}), 404
+        # user = User.query.filter_by(user_id=user_id).first()
+        # if not user:
+        #     return jsonify({"error": "User not found"}), 404
         
         # 查询简历数据
         if resume_id:
             # 查询指定resume_id的简历
-            resume = Resume.query.filter_by(resume_id=resume_id, user_id=user.id).first()
+            resume = Resume.query.filter_by(resume_id=resume_id, user_id=user_id).first()
         else:
             # 查询最新的简历
-            resume = Resume.query.filter_by(user_id=user.id).order_by(Resume.updated_at.desc()).first()
+            resume = Resume.query.filter_by(user_id=user_id).order_by(Resume.updated_at.desc()).first()
         
         if not resume:
             return jsonify({"error": "Resume not found"}), 404
@@ -160,7 +161,7 @@ def get_resume():
             "starRewrite": resume.star_rewrite,
             "optimizedResume": resume.optimized_content,
             "resumeId": resume.resume_id,
-            "userId": user.user_id
+            "userId": user_id
         }
         
         return jsonify(result), 200

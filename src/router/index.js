@@ -14,6 +14,21 @@ const router = createRouter({
       component: () => import('../views/LoginView.vue')
     },
     {
+      path: '/register',
+      name: 'register',
+      component: () => import('../views/RegisterView.vue')
+    },
+    {
+      path: '/forgot-password',
+      name: 'forgotPassword',
+      component: () => import('../views/ForgotPasswordView.vue')
+    },
+    {
+      path: '/reset-password',
+      name: 'resetPassword',
+      component: () => import('../views/ResetPasswordView.vue')
+    },
+    {
       path: '/resume',
       name: 'resume',
       component: () => import('../views/ResumeView.vue')
@@ -42,55 +57,8 @@ const router = createRouter({
   
 })
 
-// 路由守卫：只有首页不需要登录，其他所有页面都需要登录
+// 路由守卫：公共页面直接放行，保护页面由组件自己处理登录检查
 router.beforeEach((to, from, next) => {
-  // 检查是否已登录
-  const isLoggedIn = typeof localStorage !== 'undefined' && !!localStorage.getItem('token')
-  
-  // 登录页面不需要认证
-  if (to.name === 'login') {
-    if (isLoggedIn) {
-      // 已登录，跳转到首页
-      next({ name: 'home' })
-      return
-    }
-    next()
-    return
-  }
-  
-  // 首页不需要登录
-  if (to.name === 'home') {
-    next()
-    return
-  }
-  
-  // 所有其他页面都需要登录
-  if (!isLoggedIn) {
-    if (typeof window !== 'undefined') {
-      window.alert('请先登录')
-    }
-    next({ name: 'login' })
-    return
-  }
-  
-  // 检查是否需要上传简历（仅针对部分页面）
-  const requiresResume = new Set(['selfIntro', 'questionBank', 'mockInterview', 'strategy'])
-  if (requiresResume.has(to.name)) {
-    let hasResume = false
-    try {
-      hasResume = typeof localStorage !== 'undefined' && !!localStorage.getItem('resumeId')
-    } catch (_) {
-      hasResume = false
-    }
-    if (!hasResume) {
-      if (typeof window !== 'undefined') {
-        window.alert('请先上传简历')
-      }
-      next({ name: 'resume' })
-      return
-    }
-  }
-  
   next()
 })
 

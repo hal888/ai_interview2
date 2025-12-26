@@ -57,6 +57,11 @@ const handleResize = () => {
   windowWidth.value = typeof window !== 'undefined' ? window.innerWidth : windowWidth.value
 }
 
+// 计算用户是否已登录
+const isUserLoggedIn = computed(() => {
+  return !!localStorage.getItem('token') || !!sessionStorage.getItem('token')
+})
+
 // 组件挂载时添加事件监听
 onMounted(() => {
   // 确保页面加载时导航栏显示
@@ -65,6 +70,23 @@ onMounted(() => {
   window.addEventListener('scroll', handleScroll, { passive: true })
   window.addEventListener('resize', handleResize)
 })
+
+// 退出登录处理
+const handleLogout = () => {
+  // 清除本地存储的令牌和用户信息
+  localStorage.removeItem('token')
+  localStorage.removeItem('userId')
+  localStorage.removeItem('email')
+  localStorage.removeItem('resumeId')
+  
+  // 清除会话存储的令牌和用户信息
+  sessionStorage.removeItem('token')
+  sessionStorage.removeItem('userId')
+  sessionStorage.removeItem('email')
+  
+  // 跳转到登录页
+  window.location.href = '/login'
+}
 
 // 组件卸载时移除事件监听
 onUnmounted(() => {
@@ -99,6 +121,13 @@ onUnmounted(() => {
           <router-link to="/question-bank" class="nav-link" exact-active-class="active">智能题库</router-link>
           <router-link to="/mock-interview" class="nav-link" exact-active-class="active">模拟面试</router-link>
           <router-link to="/strategy" class="nav-link" exact-active-class="active">面试策略</router-link>
+          <template v-if="isUserLoggedIn">
+            <button class="nav-link logout-btn" @click="handleLogout">退出登录</button>
+          </template>
+          <!-- <template v-else>
+            <router-link to="/login" class="nav-link login-btn" exact-active-class="active">登录</router-link>
+            <router-link to="/register" class="nav-link register-btn" exact-active-class="active">注册</router-link>
+          </template> -->
         </div>
       </div>
     </nav>
@@ -126,6 +155,13 @@ onUnmounted(() => {
         <router-link to="/question-bank" class="nav-link" exact-active-class="active">智能题库</router-link>
         <router-link to="/mock-interview" class="nav-link" exact-active-class="active">模拟面试</router-link>
         <router-link to="/strategy" class="nav-link" exact-active-class="active">面试策略</router-link>
+        <template v-if="isUserLoggedIn">
+          <button class="nav-link logout-btn" @click="handleLogout">退出登录</button>
+        </template>
+        <!-- <template v-else>
+          <router-link to="/login" class="nav-link login-btn" exact-active-class="active">登录</router-link>
+          <router-link to="/register" class="nav-link register-btn" exact-active-class="active">注册</router-link>
+        </template> -->
       </div>
     </nav>
   </div>
@@ -155,7 +191,7 @@ onUnmounted(() => {
   background-color: rgba(255, 255, 255, 0.98) !important;
   /* 确保导航栏层级正确 */
   will-change: transform;
-  overflow: hidden;
+  overflow: visible !important;
   border-bottom: 1px solid rgba(102, 126, 234, 0.1);
 }
 
@@ -174,6 +210,7 @@ onUnmounted(() => {
   background-color: transparent !important;
   box-sizing: border-box !important;
   transition: all 0.3s ease !important;
+  width: 100% !important;
 }
 
 /* 导航栏头部 - 包含品牌和切换按钮 */
@@ -181,7 +218,6 @@ onUnmounted(() => {
   display: flex !important;
   justify-content: space-between !important;
   align-items: center !important;
-  width: 100% !important;
   padding: 15px 0 !important;
   background-color: transparent !important;
 }
@@ -226,6 +262,8 @@ onUnmounted(() => {
   flex: 1 !important;
   justify-content: center !important;
   max-height: 500px !important;
+  flex-wrap: nowrap !important;
+  overflow: visible !important;
 }
 
 /* 折叠状态下的菜单 */
@@ -290,11 +328,20 @@ onUnmounted(() => {
   .navbar-container {
     flex-direction: row !important;
     align-items: center !important;
+    flex-wrap: nowrap !important;
+    justify-content: space-between !important;
+  }
+  
+  .navbar-header {
+    flex: 0 0 auto !important;
   }
   
   .navbar-menu {
+    flex: 1 !important;
     flex-wrap: nowrap !important;
     justify-content: flex-end !important;
+    gap: 20px !important;
+    overflow: visible !important;
   }
   
   .navbar-toggle {
@@ -584,6 +631,58 @@ onUnmounted(() => {
   width: 80% !important;
 }
 
+/* 登录、注册、退出按钮样式 */
+.nav-link.login-btn {
+  background-color: rgba(102, 126, 234, 0.1) !important;
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary) !important;
+  font-weight: 600 !important;
+  transition: all 0.3s ease !important;
+}
+
+.nav-link.login-btn:hover {
+  background-color: rgba(102, 126, 234, 0.2) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2) !important;
+}
+
+.nav-link.register-btn {
+  background-color: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  transition: all 0.3s ease !important;
+}
+
+.nav-link.register-btn:hover {
+  background-color: var(--color-secondary) !important;
+  border-color: var(--color-secondary) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3) !important;
+}
+
+.nav-link.logout-btn {
+  background-color: rgba(231, 76, 60, 0.1) !important;
+  border-color: #e74c3c !important;
+  color: #e74c3c !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+}
+
+.nav-link.logout-btn:hover {
+  background-color: rgba(231, 76, 60, 0.2) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.2) !important;
+}
+
+/* 移除登录、注册、退出按钮的顶部装饰条 */
+.nav-link.login-btn::before,
+.nav-link.register-btn::before,
+.nav-link.logout-btn::before {
+  content: none !important;
+}
+
 /* Main Content */
 .main-content {
   flex: 1;
@@ -600,10 +699,18 @@ onUnmounted(() => {
 @media (min-width: 769px) and (max-width: 1024px) {
   .navbar-container {
     padding: 0 15px !important;
+    flex-wrap: nowrap !important;
   }
   
   .navbar-menu {
-    gap: 20px !important;
+    gap: 15px !important;
+    flex-wrap: nowrap !important;
+    overflow: visible !important;
+  }
+  
+  .nav-link {
+    padding: 10px 12px !important;
+    font-size: 0.9rem !important;
   }
   
   .main-content {

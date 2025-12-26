@@ -15,7 +15,7 @@ def analysis():
     data = request.get_json()
     background_info = data.get('backgroundInfo', '')
     directions = data.get('directions', [])
-    user_id = data.get('userId', 'default_user')
+    user_id = request.user_id
     
     # 根据userId获取最新的resumeId
     resume_id = '1'  # 默认值
@@ -24,7 +24,7 @@ def analysis():
         if user:
             # 获取用户最新的简历
             from app.models import Resume
-            latest_resume = Resume.query.filter_by(user_id=user.id).order_by(Resume.updated_at.desc()).first()
+            latest_resume = Resume.query.filter_by(user_id=user_id).order_by(Resume.updated_at.desc()).first()
             if latest_resume:
                 resume_id = latest_resume.resume_id
                 print(f"[API LOG] 使用用户最新的简历ID: {resume_id}")
@@ -135,17 +135,10 @@ def analysis():
             }
         
         # 保存到数据库
-        try:
-            # 获取或创建用户
-            user = User.query.filter_by(user_id=user_id).first()
-            if not user:
-                user = User(user_id=user_id)
-                db.session.add(user)
-                db.session.commit()
-            
+        try:       
             # 创建InterviewStrategy记录
             strategy = InterviewStrategy(
-                user_id=user.id,
+                user_id=user_id,
                 resume_id=resume_id,
                 type='analysis',
                 background_info=background_info,
@@ -206,7 +199,7 @@ def get_analysis_history():
             return jsonify({"error": "User not found"}), 404
         
         # 获取用户的所有策略分析记录
-        strategies = InterviewStrategy.query.filter_by(user_id=user.id, type='analysis').order_by(InterviewStrategy.created_at.desc()).all()
+        strategies = InterviewStrategy.query.filter_by(user_id=user_id, type='analysis').order_by(InterviewStrategy.created_at.desc()).all()
         
         # 转换为前端需要的格式
         history = []
@@ -243,7 +236,7 @@ def questions():
         if user:
             # 获取用户最新的简历
             from app.models import Resume
-            latest_resume = Resume.query.filter_by(user_id=user.id).order_by(Resume.updated_at.desc()).first()
+            latest_resume = Resume.query.filter_by(user_id=user_id).order_by(Resume.updated_at.desc()).first()
             if latest_resume:
                 resume_id = latest_resume.resume_id
                 print(f"[API LOG] 使用用户最新的简历ID: {resume_id}")
@@ -368,17 +361,10 @@ def questions():
             }
         
         # 保存到数据库
-        try:
-            # 获取或创建用户
-            user = User.query.filter_by(user_id=user_id).first()
-            if not user:
-                user = User(user_id=user_id)
-                db.session.add(user)
-                db.session.commit()
-            
+        try:          
             # 创建InterviewStrategy记录
             strategy = InterviewStrategy(
-                user_id=user.id,
+                user_id=user_id,
                 resume_id=resume_id,
                 type='questions',
                 company_name=company_name,
@@ -448,7 +434,7 @@ def get_questions_history():
             return jsonify({"error": "User not found"}), 404
         
         # 获取用户的所有反问问题记录
-        strategies = InterviewStrategy.query.filter_by(user_id=user.id, type='questions').order_by(InterviewStrategy.created_at.desc()).all()
+        strategies = InterviewStrategy.query.filter_by(user_id=user_id, type='questions').order_by(InterviewStrategy.created_at.desc()).all()
         
         # 转换为前端需要的格式
         history = []

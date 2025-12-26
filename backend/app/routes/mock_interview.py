@@ -34,7 +34,7 @@ def start():
         if user:
             # 获取用户最新的简历
             from app.models import Resume
-            latest_resume = Resume.query.filter_by(user_id=user.id).order_by(Resume.updated_at.desc()).first()
+            latest_resume = Resume.query.filter_by(user_id=user_id).order_by(Resume.updated_at.desc()).first()
             if latest_resume:
                 resume_id = latest_resume.resume_id
                 print(f"[API LOG] 使用用户最新的简历ID: {resume_id}")
@@ -86,7 +86,7 @@ def start():
             "resume_content": resume_content,
             "current_question_id": 1,
             "total_questions": 10,
-            "conversation_history": [],
+            "conversation_history": [first_question['content']],
             "question_answers": []
         }
         
@@ -107,6 +107,19 @@ def start():
         print(f"生成第一个问题失败: {e}")
         # 使用默认问题作为备选
         first_question = {"id": 1, "content": "请介绍一下你自己", "type": "高频必问题"}
+        
+        # 保存会话信息
+        interview_sessions[interview_id] = {
+            "style": style,
+            "mode": mode,
+            "duration": duration,
+            "resume_id": resume_id,
+            "resume_content": resume_content,
+            "current_question_id": 1,
+            "total_questions": 10,
+            "conversation_history": [first_question['content']],
+            "question_answers": []
+        }
         
         return jsonify({
             "interviewId": interview_id,
@@ -170,17 +183,7 @@ def answer():
         # 清理可能的额外内容，只保留JSON部分
         start_idx = api_result.find('{')
         end_idx = api_result.rfind('}') + 1
-        if start_idx == -1 or end_idx <= start_idx:
-            # 如果解析失败，使用默认反馈和问题
-            result = {
-                "feedback": "您的回答结构清晰，重点突出，但可以更具体地描述项目成果。",
-                "nextQuestion": {
-                    "id": session["current_question_id"] + 1,
-                    "content": "您为什么想来我们公司工作？",
-                    "type": "高频必问题"
-                }
-            }
-        else:
+        if not (start_idx == -1 or end_idx <= start_idx):
             json_content = api_result[start_idx:end_idx]
             result = json.loads(json_content)
             result["nextQuestion"]["id"] = session["current_question_id"] + 1
@@ -193,19 +196,6 @@ def answer():
         
     except Exception as e:
         print(f"生成反馈和下一个问题失败: {e}")
-        # 使用默认反馈和问题作为备选
-        result = {
-            "feedback": "您的回答结构清晰，重点突出，但可以更具体地描述项目成果。",
-            "nextQuestion": {
-                "id": session["current_question_id"] + 1,
-                "content": "您为什么想来我们公司工作？",
-                "type": "高频必问题"
-            }
-        }
-        
-        # 更新会话信息
-        session["current_question_id"] += 1
-        session["conversation_history"].append(result["nextQuestion"]["content"])
         
         return jsonify(result), 200
 
@@ -247,44 +237,15 @@ def end():
         # 清理可能的额外内容，只保留JSON部分
         start_idx = api_result.find('{')
         end_idx = api_result.rfind('}') + 1
-        if start_idx == -1 or end_idx <= start_idx:
-            # 如果解析失败，使用默认报告
-            report = {
-                "professionalScore": 85,
-                "logicScore": 78,
-                "confidenceScore": 82,
-                "matchScore": 80,
-                "questionAnalysis": [
-                    {
-                        "question": "请介绍一下你自己",
-                        "answer": "我是一名前端开发工程师，有5年工作经验...",
-                        "feedback": "回答结构清晰，重点突出，但可以更具体地描述项目成果",
-                        "suggestion": "建议使用STAR法则，增加数据支撑"
-                    }
-                ],
-                "optimizationSuggestions": [
-                    "加强专业术语的使用，提升专业性",
-                    "注意语速控制，保持清晰流畅",
-                    "增加具体案例，增强说服力",
-                    "加强与面试官的眼神交流（视频面试）"
-                ]
-            }
-        else:
+        if not (start_idx == -1 or end_idx <= start_idx):
             json_content = api_result[start_idx:end_idx]
             report = json.loads(json_content)
         
         # 保存到数据库
-        try:
-            # 获取或创建用户
-            user = User.query.filter_by(user_id=user_id).first()
-            if not user:
-                user = User(user_id=user_id)
-                db.session.add(user)
-                db.session.commit()
-            
+        try:      
             # 创建MockInterview记录
             mock_interview = MockInterview(
-                user_id=user.id,
+                user_id=user_id,
                 resume_id=session['resume_id'],
                 style=session['style'],
                 mode=session['mode'],
@@ -305,27 +266,6 @@ def end():
         
     except Exception as e:
         print(f"生成面试报告失败: {e}")
-        # 使用默认报告作为备选
-        report = {
-            "professionalScore": 85,
-            "logicScore": 78,
-            "confidenceScore": 82,
-            "matchScore": 80,
-            "questionAnalysis": [
-                {
-                    "question": "请介绍一下你自己",
-                    "answer": "我是一名前端开发工程师，有5年工作经验...",
-                    "feedback": "回答结构清晰，重点突出，但可以更具体地描述项目成果",
-                    "suggestion": "建议使用STAR法则，增加数据支撑"
-                }
-            ],
-            "optimizationSuggestions": [
-                "加强专业术语的使用，提升专业性",
-                "注意语速控制，保持清晰流畅",
-                "增加具体案例，增强说服力",
-                "加强与面试官的眼神交流（视频面试）"
-            ]
-        }
         
         # 删除会话信息
         del interview_sessions[interview_id]
@@ -402,18 +342,7 @@ def voice_answer():
             # 清理可能的额外内容，只保留JSON部分
             start_idx = api_result.find('{')
             end_idx = api_result.rfind('}') + 1
-            if start_idx == -1 or end_idx <= start_idx:
-                # 如果解析失败，使用默认反馈和问题
-                result = {
-                    "transcribedText": transcribed_text,
-                    "feedback": "您的回答结构清晰，重点突出，但可以更具体地描述项目成果。",
-                    "nextQuestion": {
-                        "id": session["current_question_id"] + 1,
-                        "content": "您为什么想来我们公司工作？",
-                        "type": "高频必问题"
-                    }
-                }
-            else:
+            if not (start_idx == -1 or end_idx <= start_idx):
                 json_content = api_result[start_idx:end_idx]
                 result = json.loads(json_content)
                 result["nextQuestion"]["id"] = session["current_question_id"] + 1
@@ -427,20 +356,6 @@ def voice_answer():
             
         except Exception as e:
             print(f"生成反馈和下一个问题失败: {e}")
-            # 使用默认反馈和问题作为备选
-            result = {
-                "transcribedText": transcribed_text,
-                "feedback": "您的回答结构清晰，重点突出，但可以更具体地描述项目成果。",
-                "nextQuestion": {
-                    "id": session["current_question_id"] + 1,
-                    "content": "您为什么想来我们公司工作？",
-                    "type": "高频必问题"
-                }
-            }
-            
-            # 更新会话信息
-            session["current_question_id"] += 1
-            session["conversation_history"].append(result["nextQuestion"]["content"])
             
             return jsonify(result), 200
             
@@ -471,7 +386,7 @@ def get_history():
             return jsonify({"error": "User not found"}), 404
         
         # 构建查询
-        query = MockInterview.query.filter_by(user_id=user.id)
+        query = MockInterview.query.filter_by(user_id=user_id)
         
         # 添加条件过滤
         if style:
@@ -528,17 +443,11 @@ def save_report():
         
         if not user_id or not report_data:
             return jsonify({"error": "Missing required parameters"}), 400
-        
-        # 获取或创建用户
-        user = User.query.filter_by(user_id=user_id).first()
-        if not user:
-            user = User(user_id=user_id)
-            db.session.add(user)
-            db.session.commit()
+
         
         # 创建MockInterview记录
         mock_interview = MockInterview(
-            user_id=user.id,
+            user_id=user_id,
             resume_id=resume_id,
             style=style,
             mode=mode,

@@ -1,5 +1,6 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
+from flask_mail import Mail
 import os
 
 # 创建Flask应用实例
@@ -11,13 +12,33 @@ CORS(app, origins=["https://interview.ailongdev.com", "http://localhost:5173"])
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # 导入配置
-from config import DEEPSEEK_CONFIG, SQLALCHEMY_DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS, SQLALCHEMY_POOL_SIZE, SQLALCHEMY_MAX_OVERFLOW
+from config import (
+    DEEPSEEK_CONFIG, 
+    SQLALCHEMY_DATABASE_URI, 
+    SQLALCHEMY_TRACK_MODIFICATIONS, 
+    SQLALCHEMY_POOL_SIZE, 
+    SQLALCHEMY_MAX_OVERFLOW,
+    MAIL_CONFIG,
+    JWT_CONFIG
+)
 
 # 配置SQLAlchemy
 app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = SQLALCHEMY_TRACK_MODIFICATIONS
 app.config['SQLALCHEMY_POOL_SIZE'] = SQLALCHEMY_POOL_SIZE
 app.config['SQLALCHEMY_MAX_OVERFLOW'] = SQLALCHEMY_MAX_OVERFLOW
+
+# 配置Flask-Mail
+app.config['MAIL_SERVER'] = MAIL_CONFIG['server']
+app.config['MAIL_PORT'] = MAIL_CONFIG['port']
+app.config['MAIL_USERNAME'] = MAIL_CONFIG['username']
+app.config['MAIL_PASSWORD'] = MAIL_CONFIG['password']
+app.config['MAIL_USE_TLS'] = MAIL_CONFIG['use_tls']
+app.config['MAIL_USE_SSL'] = MAIL_CONFIG['use_ssl']
+app.config['MAIL_DEFAULT_SENDER'] = MAIL_CONFIG['default_sender']
+
+# 初始化Flask-Mail
+mail = Mail(app)
 
 # 导入并初始化数据库
 from .models import db

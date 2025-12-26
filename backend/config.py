@@ -39,3 +39,29 @@ RESUME_CONFIG = {
     "original_path": os.getenv("RESUME_ORIGINAL_PATH", "original"),
     "optimized_path": os.getenv("RESUME_OPTIMIZED_PATH", "optimized")
 }
+
+# 邮件发送配置
+MAIL_CONFIG = {
+    "server": os.getenv("MAIL_SERVER", "smtp.gmail.com"),
+    "port": int(os.getenv("MAIL_PORT", "587")),
+    "username": os.getenv("MAIL_USERNAME", ""),
+    "password": os.getenv("MAIL_PASSWORD", ""),
+    "use_tls": os.getenv("MAIL_USE_TLS", "True").lower() == "true",
+    "use_ssl": os.getenv("MAIL_USE_SSL", "False").lower() == "true",
+    "default_sender": os.getenv("MAIL_DEFAULT_SENDER", "")
+}
+
+# JWT配置
+JWT_CONFIG = {
+    "secret_key": os.getenv("JWT_SECRET_KEY", "default_secret_key_override_in_production"),
+    "algorithm": os.getenv("JWT_ALGORITHM", "HS256"),
+    "access_token_expiry": int(os.getenv("JWT_ACCESS_TOKEN_EXPIRY", "604800"))  # 7天
+}
+
+# 认证配置
+AUTH_CONFIG = {
+    "verification_code_expiry": int(os.getenv("VERIFICATION_CODE_EXPIRY", "900")),  # 15分钟
+    "reset_password_expiry": int(os.getenv("RESET_PASSWORD_EXPIRY", "86400")),  # 24小时
+    "max_login_attempts": int(os.getenv("MAX_LOGIN_ATTEMPTS", "5")),  # 最大登录尝试次数
+    "lock_duration": int(os.getenv("LOCK_DURATION", "300"))  # 账号锁定时间（秒）
+}

@@ -157,14 +157,51 @@
       </div>
     </div>
   </div>
+  
+  <!-- 错误提示组件 -->
+  <ErrorMessage 
+    :show="showError" 
+    :message="errorMessage" 
+    :title="errorTitle"
+    @close="closeError"
+  />
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import ErrorMessage from '@/components/ErrorMessage.vue'
 import apiClient from '@/utils/api.js'
 
 const router = useRouter()
+
+// 错误提示相关
+const showError = ref(false)
+const errorMessage = ref('')
+const errorTitle = ref('提示')
+// 错误提示关闭后的回调函数
+const errorCloseCallback = ref(null)
+
+// 显示错误信息
+const showErrorMessage = (message, title = '提示', callback = null) => {
+  errorMessage.value = message
+  errorTitle.value = title
+  errorCloseCallback.value = callback
+  showError.value = true
+}
+
+// 关闭错误信息
+const closeError = () => {
+  showError.value = false
+  errorMessage.value = ''
+  errorTitle.value = '提示'
+  // 执行回调函数
+  if (errorCloseCallback.value) {
+    const callback = errorCloseCallback.value
+    errorCloseCallback.value = null
+    callback()
+  }
+}
 
 const selectedVersion = ref('30秒电梯演讲版')
 const selectedStyle = ref('正式')
@@ -224,10 +261,15 @@ const fetchSelfIntro = async () => {
     }
   } catch (error) {
     console.log('获取特定类型自我介绍失败:', error)
-    // 检查是否是用户不存在的错误
-    if (error.response && error.response.data && error.response.data.error === 'User not found') {
-      alert('请先上传简历进行优化，然后再生成自我介绍')
-      router.push('/resume')
+    if (error.isUnauthorized) {
+      // 401错误，显示请先登录提示，点击确定后跳转到登录页
+      showErrorMessage('请先登录', '提示', () => {
+        router.push('/login')
+      })
+    } else if (error.response && error.response.data && error.response.data.error === 'User not found') {
+      showErrorMessage('请先上传简历进行优化，然后再生成自我介绍', '提示', () => {
+        router.push('/resume')
+      })
     } else {
       generatedIntro.value = ''
     }
@@ -282,7 +324,14 @@ const generateIntro = () => {
   })
   .catch(error => {
     console.error('生成自我介绍失败:', error)
-    alert('生成自我介绍失败，请重试')
+    if (error.isUnauthorized) {
+      // 401错误，显示请先登录提示，点击确定后跳转到登录页
+      showErrorMessage('请先登录', '提示', () => {
+        router.push('/login')
+      })
+    } else {
+      showErrorMessage('生成自我介绍失败，请重试', '失败')
+    }
   })
   .finally(() => {
     isGenerating.value = false
@@ -291,7 +340,7 @@ const generateIntro = () => {
 
 const copyIntro = () => {
   navigator.clipboard.writeText(generatedIntro.value)
-  alert('已复制到剪贴板')
+  showErrorMessage('已复制到剪贴板', '提示')
 }
 
 const toggleTeleprompter = () => {
@@ -325,7 +374,7 @@ const playIntro = () => {
   
   // 检查浏览器是否支持语音合成
   if (!window.speechSynthesis) {
-    alert('您的浏览器不支持语音合成功能')
+    showErrorMessage('您的浏览器不支持语音合成功能', '提示')
     return
   }
   
@@ -352,13 +401,13 @@ const playIntro = () => {
     utterance.onerror = (event) => {
       console.error('语音合成错误:', event)
       isPlaying.value = false
-      alert('语音合成失败，请重试')
+      showErrorMessage('语音合成失败，请重试', '失败')
     }
     
   } catch (error) {
     console.error('播放自我介绍失败:', error)
     isPlaying.value = false
-    alert('播放失败，请重试')
+    showErrorMessage('播放失败，请重试', '失败')
   }
 }
 

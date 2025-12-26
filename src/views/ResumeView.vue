@@ -188,11 +188,23 @@
       </div>
     </div>
   </div>
+  
+  <!-- 错误提示组件 -->
+  <ErrorMessage 
+    :show="showError" 
+    :message="errorMessage" 
+    :title="errorTitle"
+    @close="closeError"
+  />
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import apiClient from '@/utils/api.js'
+import { useRouter } from 'vue-router'
+import ErrorMessage from '@/components/ErrorMessage.vue'
+
+const router = useRouter()
 
 // 动态导入大型库，减少初始加载时间
 const loadLibraries = {
@@ -249,29 +261,65 @@ const fileInputGeneric = ref(null)
 const fileInputCamera = ref(null)
 const fileInputGallery = ref(null)
 
+// 错误提示相关
+const showError = ref(false)
+const errorMessage = ref('')
+const errorTitle = ref('提示')
+// 错误提示关闭后的回调函数
+const errorCloseCallback = ref(null)
+
+// 显示错误信息
+const showErrorMessage = (message, title = '提示', callback = null) => {
+  errorMessage.value = message
+  errorTitle.value = title
+  errorCloseCallback.value = callback
+  showError.value = true
+}
+
+// 关闭错误信息
+const closeError = () => {
+  showError.value = false
+  errorMessage.value = ''
+  errorTitle.value = '提示'
+  // 执行回调函数
+  if (errorCloseCallback.value) {
+    const callback = errorCloseCallback.value
+    errorCloseCallback.value = null
+    callback()
+  }
+}
+
 // 页面加载时自动获取最新的简历优化内容
 onMounted(async () => {
   try {
+        let userId = localStorage.getItem('userId')
+        if (!userId) return
         // 从localStorage获取resumeId
         const resumeId = localStorage.getItem('resumeId')
         
         // 只有在用户有resumeId的情况下才调用API获取简历数据
-        if (resumeId) {
+        // if (resumeId) {
             // 调用后端API获取最新的简历数据，使用相对路径，自动适配不同环境
             const response = await apiClient.post('/resume/get', {
                 resumeId: resumeId
             })
       
-      // 如果返回了简历数据，填充到页面上
-      if (response.data && response.data.optimizedResume) {
-        resumeData.value = response.data
-        // 更新formattedResume
-        await updateFormattedResume()
-      }
-    }
+            // 如果返回了简历数据，填充到页面上
+            if (response.data && response.data.optimizedResume) {
+              resumeData.value = response.data
+              // 更新formattedResume
+              await updateFormattedResume()
+            }
+    // }
   } catch (error) {
     // 如果没有找到数据或其他错误，忽略，等待用户上传新简历
     console.log('获取最新简历失败:', error)
+    if (error.isUnauthorized) {
+      // 401错误，显示请先登录提示，点击确定后跳转到登录页
+      showErrorMessage('请先登录', '提示', () => {
+        router.push('/login')
+      })
+    }
   }
   
   // 异步加载最近文件，不阻塞主线程
@@ -299,7 +347,7 @@ const handleDragDrop = (event) => {
 const uploadResume = (file) => {
   // 验证文件类型，只接受PDF文件
   if (!file.name.toLowerCase().endsWith('.pdf')) {
-    alert('只支持PDF格式文件，请重新选择')
+    showErrorMessage('只支持PDF格式文件，请重新选择', '提示')
     return
   }
   
@@ -324,7 +372,14 @@ const uploadResume = (file) => {
   })
   .catch(error => {
     console.error('简历分析失败:', error)
-    alert('简历分析失败，请重试')
+    if (error.isUnauthorized) {
+      // 401错误，显示请先登录提示，点击确定后跳转到登录页
+      showErrorMessage('请先登录', '提示', () => {
+        router.push('/login')
+      })
+    } else {
+      showErrorMessage('简历分析失败，请重试', '失败')
+    }
   })
   .finally(() => {
     isUploading.value = false
@@ -637,7 +692,7 @@ const downloadResume = async () => {
     doc.save('optimized_resume.pdf')
   } catch (error) {
     console.error('生成PDF失败:', error)
-    alert('生成PDF失败，请重试')
+    showErrorMessage('生成PDF失败，请重试', '失败')
   }
 }
 

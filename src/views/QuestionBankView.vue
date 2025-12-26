@@ -128,17 +128,53 @@
       </div>
     </div>
   </div>
+  
+  <!-- 错误提示组件 -->
+  <ErrorMessage 
+    :show="showError" 
+    :message="errorMessage" 
+    :title="errorTitle"
+    @close="closeError"
+  />
 </template>
 
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import apiClient from '@/utils/api.js'
+import ErrorMessage from '@/components/ErrorMessage.vue'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 
 const router = useRouter()
 
+// 错误提示相关
+const showError = ref(false)
+const errorMessage = ref('')
+const errorTitle = ref('提示')
+// 错误提示关闭后的回调函数
+const errorCloseCallback = ref(null)
+
+// 显示错误信息
+const showErrorMessage = (message, title = '提示', callback = null) => {
+  errorMessage.value = message
+  errorTitle.value = title
+  errorCloseCallback.value = callback
+  showError.value = true
+}
+
+// 关闭错误信息
+const closeError = () => {
+  showError.value = false
+  errorMessage.value = ''
+  errorTitle.value = '提示'
+  // 执行回调函数
+  if (errorCloseCallback.value) {
+    const callback = errorCloseCallback.value
+    errorCloseCallback.value = null
+    callback()
+  }
+}
 
 const selectedCount = ref(10)
 const customTopic = ref('')
@@ -189,10 +225,15 @@ const fetchQuestionBank = async () => {
     }
   } catch (error) {
     console.log('获取已生成题库失败:', error)
-    // 检查是否是用户不存在的错误
-    if (error.response && error.response.data && error.response.data.error === 'User not found') {
-      alert('请先上传简历进行优化，然后再生成题库')
-      router.push('/resume')
+    if (error.isUnauthorized) {
+      // 401错误，显示请先登录提示，点击确定后跳转到登录页
+      showErrorMessage('请先登录', '提示', () => {
+        router.push('/login')
+      })
+    } else if (error.response && error.response.data && error.response.data.error === 'User not found') {
+      showErrorMessage('请先上传简历进行优化，然后再生成题库', '提示', () => {
+        router.push('/resume')
+      })
     }
     // 其他错误忽略，等待用户手动生成
   }
@@ -249,7 +290,14 @@ const generateQuestions = () => {
   })
   .catch(error => {
     console.error('生成题库失败:', error)
-    alert('生成题库失败，请重试')
+    if (error.isUnauthorized) {
+      // 401错误，显示请先登录提示，点击确定后跳转到登录页
+      showErrorMessage('请先登录', '提示', () => {
+        router.push('/login')
+      })
+    } else {
+      showErrorMessage('生成题库失败，请重试', '失败')
+    }
   })
   .finally(() => {
     isGenerating.value = false
@@ -262,7 +310,7 @@ const toggleAnswer = (index) => {
 
 const exportQuestions = async () => {
   if (questions.value.length === 0) {
-    alert('请先生成题库')
+    showErrorMessage('请先生成题库', '提示')
     return
   }
 
@@ -453,7 +501,7 @@ const exportQuestions = async () => {
     document.body.removeChild(tempContainer)
   } catch (error) {
     console.error('生成PDF失败:', error)
-    alert('生成PDF失败，请重试')
+    showErrorMessage('生成PDF失败，请重试', '失败')
   }
 }
 

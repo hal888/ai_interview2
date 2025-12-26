@@ -5,75 +5,176 @@
       <p class="login-subtitle">登录系统，开启您的面试优化之旅</p>
       
       <div class="login-form">
+        <!-- 邮箱输入框 -->
         <div class="form-group">
-          <label for="userId" class="form-label">用户ID</label>
+          <label for="email" class="form-label">邮箱</label>
           <input 
-            type="text" 
-            id="userId" 
-            v-model="userId" 
+            type="email" 
+            id="email" 
+            v-model="email" 
             class="form-input" 
-            placeholder="请输入用户ID" 
+            placeholder="请输入您的邮箱" 
             required
             @keyup.enter="handleLogin"
           />
         </div>
         
+        <!-- 密码输入框 -->
+        <div class="form-group">
+          <div class="password-label-container">
+            <label for="password" class="form-label">密码</label>
+            <button 
+              class="forgot-password-link" 
+              @click="handleForgotPassword"
+            >
+              忘记密码？
+            </button>
+          </div>
+          <input 
+            type="password" 
+            id="password" 
+            v-model="password" 
+            class="form-input" 
+            placeholder="请输入您的密码" 
+            required
+            @keyup.enter="handleLogin"
+          />
+        </div>
+        
+        <!-- 记住我选项 -->
+        <div class="remember-me-container">
+          <label class="remember-me-label">
+            <input 
+              type="checkbox" 
+              v-model="rememberMe" 
+              class="remember-me-checkbox"
+            />
+            <span class="remember-me-text">记住我</span>
+          </label>
+        </div>
+        
+        <!-- 登录按钮 -->
         <button 
           class="login-button" 
           @click="handleLogin"
-          :disabled="isLoading"
+          :disabled="isLoading || !isFormValid"
         >
           <span v-if="isLoading" class="loading-spinner"></span>
           {{ isLoading ? '登录中...' : '登录' }}
         </button>
         
+        <!-- 注册链接 -->
         <div class="login-footer">
-          <p>还没有账号？<button class="register-link" @click="generateRandomUserId">随机生成用户ID</button></p>
+          <p>还没有账号？<button class="register-link" @click="handleRegister">立即注册</button></p>
         </div>
       </div>
     </div>
+    
+    <!-- 错误提示组件 -->
+    <ErrorMessage 
+      :show="showError" 
+      :message="errorMessage" 
+      :title="errorTitle"
+      @close="closeError"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import apiClient from '@/utils/api.js'
+import ErrorMessage from '@/components/ErrorMessage.vue'
 
 const router = useRouter()
-const userId = ref('')
+const email = ref('')
+const password = ref('')
+const rememberMe = ref(false)
 const isLoading = ref(false)
+
+// 错误提示相关
+const showError = ref(false)
+const errorMessage = ref('')
+const errorTitle = ref('提示')
+
+// 表单验证
+const isFormValid = computed(() => {
+  return email.value.trim() && password.value.trim() && isEmailValid(email.value)
+})
+
+// 邮箱格式验证
+const isEmailValid = (email) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
+// 显示错误信息
+const showErrorMessage = (message, title = '提示') => {
+  errorMessage.value = message
+  errorTitle.value = title
+  showError.value = true
+}
+
+// 关闭错误信息
+const closeError = () => {
+  showError.value = false
+  errorMessage.value = ''
+  errorTitle.value = '提示'
+}
 
 // 处理登录
 const handleLogin = async () => {
-  if (!userId.value.trim()) {
-    alert('请输入用户ID')
+  if (!isFormValid.value) {
+    showErrorMessage('请输入有效的邮箱和密码', '登录失败')
     return
   }
   
   try {
     isLoading.value = true
     // 调用登录API获取令牌
-    const response = await apiClient.post('/auth/login', { userId: userId.value })
+    const response = await apiClient.post('/auth/login', { 
+      email: email.value, 
+      password: password.value 
+    })
     
-    // 存储令牌和userId
+    // 存储令牌和用户信息
     localStorage.setItem('token', response.data.token)
-    localStorage.setItem('userId', response.data.userId)
+    localStorage.setItem('userId', response.data.userId || '')
+    localStorage.setItem('email', response.data.email)
+    
+    // 如果选择了记住我，存储到localStorage，否则存储到sessionStorage
+    if (rememberMe.value) {
+      localStorage.setItem('rememberMe', 'true')
+    } else {
+      sessionStorage.setItem('token', response.data.token)
+      sessionStorage.setItem('userId', response.data.userId || '')
+      sessionStorage.setItem('email', response.data.email)
+    }
+
+    //打印userId
+    // console.log('userId:', response.data.userId)
+    // //打印localStorage的userId
+    // console.log('localStorage_userID:', localStorage.getItem('userId'))
+    //  console.log('sessionStorage_userID:', sessionStorage.getItem('userId'))
     
     // 登录成功后跳转到首页或之前的页面
     router.push('/')
   } catch (error) {
     console.error('登录失败:', error)
-    alert('登录失败，请重试')
+    showErrorMessage(error.response?.data?.error || '登录失败，请重试', '登录失败')
   } finally {
     isLoading.value = false
   }
 }
 
-// 生成随机用户ID
-const generateRandomUserId = () => {
-  const randomUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  userId.value = randomUserId
+// 处理忘记密码
+const handleForgotPassword = () => {
+  router.push('/forgot-password')
+}
+
+// 处理注册
+const handleRegister = () => {
+  router.push('/register')
 }
 </script>
 

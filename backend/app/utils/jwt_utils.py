@@ -1,26 +1,26 @@
 import jwt
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 import datetime
-import os
 from functools import wraps
 from flask import request, jsonify
+from config import JWT_CONFIG
 
 class JWTUtil:
     @staticmethod
     def generate_token(user_id):
         payload = {
             'user_id': user_id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(seconds=JWT_CONFIG['access_token_expiry'])
         }
-        return jwt.encode(payload, os.getenv('JWT_SECRET_KEY', 'default_secret_key_override_in_production'), algorithm='HS256')
+        return jwt.encode(payload, JWT_CONFIG['secret_key'], algorithm=JWT_CONFIG['algorithm'])
     
     @staticmethod
     def verify_token(token):
         try:
             payload = jwt.decode(
                 token,
-                os.getenv('JWT_SECRET_KEY', 'default_secret_key_override_in_production'),
-                algorithms=['HS256']
+                JWT_CONFIG['secret_key'],
+                algorithms=[JWT_CONFIG['algorithm']]
             )
             return payload['user_id']
         except ExpiredSignatureError:

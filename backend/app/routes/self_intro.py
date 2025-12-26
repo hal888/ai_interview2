@@ -28,7 +28,7 @@ def generate():
         if user:
             # 获取用户最新的简历
             from app.models import Resume
-            latest_resume = Resume.query.filter_by(user_id=user.id).order_by(Resume.updated_at.desc()).first()
+            latest_resume = Resume.query.filter_by(user_id=user_id).order_by(Resume.updated_at.desc()).first()
             if latest_resume:
                 resume_id = latest_resume.resume_id
                 print(f"[API LOG] 使用用户最新的简历ID: {resume_id}")
@@ -61,7 +61,7 @@ def generate():
             if user:
                 # 创建自我介绍记录
                 self_intro = SelfIntro(
-                    user_id=user.id,
+                    user_id=user_id,
                     resume_id=resume_id,
                     self_intro_type=f"{version}_{style}",
                     content=intro
@@ -106,10 +106,10 @@ def get_self_intro():
         # 查询自我介绍数据
         if intro_type:
             # 查询指定类型的自我介绍
-            self_intro = SelfIntro.query.filter_by(self_intro_type=intro_type, user_id=user.id).first()
+            self_intro = SelfIntro.query.filter_by(self_intro_type=intro_type, user_id=user_id).first()
         else:
             # 查询最新的自我介绍
-            self_intro = SelfIntro.query.filter_by(user_id=user.id).order_by(SelfIntro.updated_at.desc()).first()
+            self_intro = SelfIntro.query.filter_by(user_id=user_id).order_by(SelfIntro.updated_at.desc()).first()
         
         if not self_intro:
             return jsonify({"error": "Self introduction not found"}), 404

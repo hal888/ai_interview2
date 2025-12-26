@@ -2,6 +2,8 @@ from flask_sqlalchemy import SQLAlchemy
 import datetime
 import uuid
 
+from httpx._transports import default
+
 # 创建SQLAlchemy实例
 db = SQLAlchemy()
 
@@ -10,7 +12,16 @@ class User(db.Model):
     __tablename__ = 'users'
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = db.Column(db.String(36), unique=True, nullable=False)  # 前端localStorage中的user_id
+    user_id = db.Column(db.String(36), unique=True, default=lambda: str(uuid.uuid4()))  # 前端localStorage中的user_id
+    email = db.Column(db.String(120), unique=True, nullable=False)  # 邮箱作为用户唯一标识
+    password = db.Column(db.String(255), nullable=False)  # 加密后的密码
+    email_verified = db.Column(db.Boolean, default=False)  # 邮箱是否已验证
+    verification_code = db.Column(db.String(6), nullable=True)  # 邮箱验证码
+    verification_code_expiry = db.Column(db.DateTime, nullable=True)  # 验证码过期时间
+    reset_password_token = db.Column(db.String(100), nullable=True)  # 密码重置令牌
+    reset_password_expiry = db.Column(db.DateTime, nullable=True)  # 密码重置令牌过期时间
+    login_attempts = db.Column(db.Integer, default=0)  # 登录尝试次数
+    locked_until = db.Column(db.DateTime, nullable=True)  # 账号锁定时间
     created_at = db.Column(db.DateTime, default=datetime.datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now)
     

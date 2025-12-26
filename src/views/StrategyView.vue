@@ -218,16 +218,53 @@
       </div>
     </div>
   </div>
+  
+  <!-- 错误提示组件 -->
+  <ErrorMessage 
+    :show="showError" 
+    :message="errorMessage" 
+    :title="errorTitle"
+    @close="closeError"
+  />
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import ErrorMessage from '@/components/ErrorMessage.vue'
 import apiClient from '@/utils/api.js'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 
 const router = useRouter()
+
+// 错误提示相关
+const showError = ref(false)
+const errorMessage = ref('')
+const errorTitle = ref('提示')
+// 错误提示关闭后的回调函数
+const errorCloseCallback = ref(null)
+
+// 显示错误信息
+const showErrorMessage = (message, title = '提示', callback = null) => {
+  errorMessage.value = message
+  errorTitle.value = title
+  errorCloseCallback.value = callback
+  showError.value = true
+}
+
+// 关闭错误信息
+const closeError = () => {
+  showError.value = false
+  errorMessage.value = ''
+  errorTitle.value = '提示'
+  // 执行回调函数
+  if (errorCloseCallback.value) {
+    const callback = errorCloseCallback.value
+    errorCloseCallback.value = null
+    callback()
+  }
+}
 
 const backgroundInfo = ref('')
 const selectedDirections = ref([])
@@ -261,11 +298,17 @@ const generateAnalysis = () => {
   })
   .catch(error => {
     console.error('生成画像分析失败:', error)
-    if (error.response && error.response.data.error === 'User not found') {
-      alert('请先上传简历进行优化，然后再生成画像分析')
-      router.push('/resume')
+    if (error.isUnauthorized) {
+      // 401错误，显示请先登录提示，点击确定后跳转到登录页
+      showErrorMessage('请先登录', '提示', () => {
+        router.push('/login')
+      })
+    } else if (error.response && error.response.data.error === 'User not found') {
+      showErrorMessage('请先上传简历进行优化，然后再生成画像分析', '提示', () => {
+        router.push('/resume')
+      })
     } else {
-      alert('生成画像分析失败，请重试')
+      showErrorMessage('生成画像分析失败，请重试', '失败')
     }
   })
   .finally(() => {
@@ -293,11 +336,17 @@ const generateQuestions = () => {
   })
   .catch(error => {
     console.error('生成问题失败:', error)
-    if (error.response && error.response.data.error === 'User not found') {
-      alert('请先上传简历进行优化，然后再生成高质量反问问题')
-      router.push('/resume')
+    if (error.isUnauthorized) {
+      // 401错误，显示请先登录提示，点击确定后跳转到登录页
+      showErrorMessage('请先登录', '提示', () => {
+        router.push('/login')
+      })
+    } else if (error.response && error.response.data.error === 'User not found') {
+      showErrorMessage('请先上传简历进行优化，然后再生成高质量反问问题', '提示', () => {
+        router.push('/resume')
+      })
     } else {
-      alert('生成问题失败，请重试')
+      showErrorMessage('生成问题失败，请重试', '失败')
     }
   })
   .finally(() => {
@@ -328,10 +377,15 @@ const fetchAnalysisHistory = async () => {
     }
   } catch (error) {
     console.error('获取画像分析历史失败:', error)
-    // 检查是否是用户不存在的错误
-    if (error.response && error.response.data.error === 'User not found') {
-      alert('请先上传简历进行优化，然后再使用面试策略功能')
-      router.push('/resume')
+    if (error.isUnauthorized) {
+      // 401错误，显示请先登录提示，点击确定后跳转到登录页
+      showErrorMessage('请先登录', '提示', () => {
+        router.push('/login')
+      })
+    } else if (error.response && error.response.data.error === 'User not found') {
+      showErrorMessage('请先上传简历进行优化，然后再使用面试策略功能', '提示', () => {
+        router.push('/resume')
+      })
     }
     // 其他错误忽略，继续执行
   }
@@ -352,10 +406,15 @@ const fetchQuestionsHistory = async () => {
     }
   } catch (error) {
     console.error('获取反问问题历史失败:', error)
-    // 检查是否是用户不存在的错误
-    if (error.response && error.response.data.error === 'User not found') {
-      alert('请先上传简历进行优化，然后再使用面试策略功能')
-      router.push('/resume')
+    if (error.isUnauthorized) {
+      // 401错误，显示请先登录提示，点击确定后跳转到登录页
+      showErrorMessage('请先登录', '提示', () => {
+        router.push('/login')
+      })
+    } else if (error.response && error.response.data.error === 'User not found') {
+      showErrorMessage('请先上传简历进行优化，然后再使用面试策略功能', '提示', () => {
+        router.push('/resume')
+      })
     }
     // 其他错误忽略，继续执行
   }
@@ -657,7 +716,7 @@ const exportStrategy = async () => {
     pdf.save('面试策略锦囊.pdf')
   } catch (error) {
     console.error('导出PDF失败:', error)
-    alert('导出PDF失败，请重试')
+    showErrorMessage('导出PDF失败，请重试', '失败')
   } finally {
     isLoading.value = false
   }

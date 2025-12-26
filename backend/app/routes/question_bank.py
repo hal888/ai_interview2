@@ -25,7 +25,7 @@ def generate():
         if user:
             # 获取用户最新的简历
             from app.models import Resume
-            latest_resume = Resume.query.filter_by(user_id=user.id).order_by(Resume.updated_at.desc()).first()
+            latest_resume = Resume.query.filter_by(user_id=user_id).order_by(Resume.updated_at.desc()).first()
             if latest_resume:
                 resume_id = latest_resume.resume_id
                 print(f"[API LOG] 使用用户最新的简历ID: {resume_id}")
@@ -163,11 +163,11 @@ def generate():
             if not user:
                 user = User(user_id=user_id)
                 db.session.add(user)
-                db.session.commit()  # 立即提交，获取user.id
+                db.session.commit()  # 立即提交，获取user_id
             
             # 创建题库记录
             question_bank = QuestionBank(
-                user_id=user.id,
+                user_id=user_id,
                 resume_id=resume_id,
                 count=count,
                 questions=result.get("questions", [])
@@ -212,7 +212,7 @@ def get_question_bank():
             return jsonify({"error": "User not found"}), 404
         
         # 查询题库数据
-        filters = {"user_id": user.id}
+        filters = {"user_id": user_id}
         if resume_id:
             filters["resume_id"] = resume_id
         if count and isinstance(count, int) and count > 0:
