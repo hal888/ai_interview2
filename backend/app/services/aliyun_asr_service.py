@@ -136,8 +136,8 @@ class AliyunASRService:
                 "X-NLS-AppKey": self.app_key
             }
             
-            # 发送请求，在测试环境中可以禁用SSL证书验证
-            response = requests.post(url, headers=headers, data=audio_data, timeout=30, verify=False)
+            # 发送请求
+            response = requests.post(url, headers=headers, data=audio_data, timeout=30)
             
             # 解析响应
             result = response.json()

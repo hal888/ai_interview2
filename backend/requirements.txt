@@ -17,9 +17,9 @@ PyPDF2==3.0.1
 PyMuPDF==1.26.6
 
 # 依赖项
-requests==2.25.1
+requests
 urllib3==2.5.0
-idna==3.3
+idna
 certifi==2025.10.5
 click==8.3.1
 Werkzeug==3.1.4
@@ -36,3 +36,5 @@ Flask-Mail==0.9.1
 
 # 语音识别
 faster-whisper==1.2.1
+aliyun-python-sdk-core==2.16.0
+aliyun-python-sdk-nls-cloud-meta==1.0.0
