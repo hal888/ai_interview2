@@ -235,6 +235,7 @@ import ErrorMessage from '@/components/ErrorMessage.vue'
 import apiClient from '@/utils/api.js'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
+import { trackEvent } from '@/utils/analytics'
 
 const router = useRouter()
 
@@ -333,6 +334,13 @@ const generateQuestions = () => {
   })
   .then(response => {
     generatedQuestions.value = response.data.questions
+    
+    // Track generate questions event
+    trackEvent('generate_strategy_questions', {
+      company: companyInfo.value.companyName,
+      position: companyInfo.value.position,
+      types: selectedQuestionTypes.value
+    })
   })
   .catch(error => {
     console.error('生成问题失败:', error)

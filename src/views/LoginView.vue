@@ -85,6 +85,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import apiClient from '@/utils/api.js'
 import ErrorMessage from '@/components/ErrorMessage.vue'
+import { trackEvent } from '@/utils/analytics'
 
 const router = useRouter()
 const email = ref('')
@@ -141,6 +142,9 @@ const handleLogin = async () => {
     localStorage.setItem('token', response.data.token)
     localStorage.setItem('userId', response.data.userId || '')
     localStorage.setItem('email', response.data.email)
+    
+    // Track login event
+    trackEvent('login', { method: 'email' })
     
     // 如果选择了记住我，存储到localStorage，否则存储到sessionStorage
     if (rememberMe.value) {

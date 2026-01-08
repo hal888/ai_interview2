@@ -8,9 +8,9 @@ const router = createRouter({
       name: 'home',
       component: () => import('../views/HomeView.vue'),
       meta: {
-        title: 'Offer贝，面试必备',
-        keywords: 'Offer贝,面试必备,简历优化,模拟面试,智能题库,自我介绍,面试策略,AI面试',
-        description: 'Offer贝，面试必备，一站式解决求职者"简历差、不会说、没题练、怕面试"的四大痛点，提供简历优化、模拟面试、智能题库等功能'
+        title: 'Offer贝 - AI智能模拟面试 | 免费简历优化与自我介绍生成器',
+        keywords: 'Offer贝,AI面试,模拟面试,简历优化,自我介绍生成,面试题库,求职辅助',
+        description: 'Offer贝利用先进AI技术，为您提供专业的简历优化建议、个性化模拟面试、海量智能题库及面试策略分析，助您轻松拿到心仪Offer。'
       }
     },
     {
@@ -58,9 +58,9 @@ const router = createRouter({
       name: 'resume',
       component: () => import('../views/ResumeView.vue'),
       meta: {
-        title: '简历解析与智能优化 - Offer贝',
-        keywords: '简历优化,简历解析,智能简历,STAR法则,简历评分,简历关键词,ATS优化,简历下载',
-        description: 'Offer贝简历优化，自动识别简历结构，智能诊断问题，提供STAR法则重写和关键词注入，提升简历竞争力'
+        title: '简历优化 - AI智能诊断与润色 | Offer贝',
+        keywords: '简历优化,简历修改,AI改简历,STAR法则,简历诊断,简历润色',
+        description: '上传简历，AI自动分析亮点与不足，提供STAR法则重写建议，一键生成专业简历，提升简历通过率。'
       }
     },
     {
@@ -68,9 +68,9 @@ const router = createRouter({
       name: 'selfIntro',
       component: () => import('../views/SelfIntroView.vue'),
       meta: {
-        title: '定制化自我介绍生成 - Offer贝',
-        keywords: '自我介绍,自我介绍生成,定制化自我介绍,面试自我介绍,30秒自我介绍,3分钟自我介绍,提词器',
-        description: 'Offer贝自我介绍生成，根据简历自动生成30秒、3分钟、5分钟多版本自我介绍，支持口语化处理和提词器模式'
+        title: '自我介绍生成器 - 30秒/3分钟多版本 | Offer贝',
+        keywords: '自我介绍生成,面试自我介绍,3分钟自我介绍,AI写自我介绍,面试提词器',
+        description: '输入简历，AI自动生成不同时长的面试自我介绍，支持口语化处理和提词器模式，助您克服面试紧张。'
       }
     },
     {
@@ -78,9 +78,9 @@ const router = createRouter({
       name: 'questionBank',
       component: () => import('../views/QuestionBankView.vue'),
       meta: {
-        title: '智能题库与定向突击 - Offer贝',
-        keywords: '智能题库,面试题库,定向突击,高频必问题,简历深挖题,专业技能题,行为情景题,模拟题库',
-        description: 'Offer贝智能题库，提供30题、50题、100题三种模式，涵盖高频必问题、简历深挖题、专业技能题和行为情景题'
+        title: 'AI智能面试题库 - 高频真题与解析 | Offer贝',
+        keywords: '面试题库,Java面试题,前端面试题,AI出题,个性化面试题,高频面试题',
+        description: '海量互联网面试真题，涵盖Java, Python, 前端等技术栈，基于简历生成个性化面试题，提供深度解析与参考答案。'
       }
     },
     {
@@ -88,9 +88,9 @@ const router = createRouter({
       name: 'mockInterview',
       component: () => import('../views/MockInterviewView.vue'),
       meta: {
-        title: '全真模拟真人面试 - Offer贝',
-        keywords: '模拟面试,AI面试,全真面试,面试官风格,语音交互,文字交互,多轮追问,面试复盘,面试报告',
-        description: 'Offer贝模拟面试，支持多种面试官风格选择，语音/文字交互模式，智能多轮追问和复盘报告，提升面试能力'
+        title: 'AI模拟面试 - 真实场景演练 | Offer贝',
+        keywords: '模拟面试,AI面试官,语音面试,面试练手,面试复盘,真实面试体验',
+        description: '全真模拟面试环境，支持语音交互，AI面试官实时反馈，提供多维度面试报告，助您提升面试实战能力。'
       }
     },
     {
@@ -98,23 +98,23 @@ const router = createRouter({
       name: 'strategy',
       component: () => import('../views/StrategyView.vue'),
       meta: {
-        title: '面试策略锦囊 - Offer贝',
-        keywords: '面试策略,面试技巧,劣势防御,防御性话术,高质量反问,面试准备,面试成功,面试经验',
-        description: 'Offer贝面试策略，提供劣势识别和防御性话术，生成高质量反问问题，助力面试成功'
+        title: '面试攻略与技巧 - 薪资谈判与避坑指南 | Offer贝',
+        keywords: '面试攻略,面试技巧,薪资谈判,面试避坑,面试反问,求职指导',
+        description: '提供全面的面试攻略，包括薪资谈判技巧、常见陷阱规避、反问环节指导等，助您掌握面试主动权。'
       }
     }
   ]
-  
+
 })
 
 // 路由守卫：公共页面直接放行，保护页面由组件自己处理登录检查
 router.beforeEach((to, from, next) => {
   // 动态更新页面标题
   document.title = to.meta.title || 'Offer贝 - 面试必备'
-  
+
   // 动态更新meta标签
   updateMetaTags(to.meta)
-  
+
   next()
 })
 
@@ -125,19 +125,19 @@ function updateMetaTags(meta) {
   if (keywordsMeta && meta.keywords) {
     keywordsMeta.setAttribute('content', meta.keywords)
   }
-  
+
   // 更新描述
   const descriptionMeta = document.querySelector('meta[name="description"]')
   if (descriptionMeta && meta.description) {
     descriptionMeta.setAttribute('content', meta.description)
   }
-  
+
   // 更新canonical链接
   let canonicalUrl = window.location.origin
   if (window.location.pathname !== '/') {
     canonicalUrl += window.location.pathname
   }
-  
+
   let canonicalLink = document.querySelector('link[rel="canonical"]')
   if (canonicalLink) {
     canonicalLink.setAttribute('href', canonicalUrl)

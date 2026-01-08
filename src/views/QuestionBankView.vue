@@ -145,6 +145,7 @@ import apiClient from '@/utils/api.js'
 import ErrorMessage from '@/components/ErrorMessage.vue'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
+import { trackEvent } from '@/utils/analytics'
 
 const router = useRouter()
 
@@ -279,6 +280,12 @@ const generateQuestions = () => {
     ...q,
     showAnswer: false
   }))
+    // Track generate questions event
+    trackEvent('generate_questions', {
+      count: selectedCount.value,
+      has_custom_topic: !!customTopic.value
+    })
+
     // 保存userId到localStorage，确保后续请求使用相同的userId
     if (response.data.userId) {
       localStorage.setItem('userId', response.data.userId)

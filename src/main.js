@@ -2,6 +2,10 @@ import { createApp } from 'vue'
 import './style.css'
 import App from './App.vue'
 import router from './router'
+import { initAnalytics } from './utils/analytics'
+
+// Initialize analytics
+initAnalytics()
 
 // 性能监控 - 页面加载时间
 if (typeof window !== 'undefined' && window.performance) {
@@ -10,11 +14,11 @@ if (typeof window !== 'undefined' && window.performance) {
     const perfData = window.performance.timing;
     const loadTime = perfData.loadEventEnd - perfData.navigationStart;
     console.log(`页面加载时间: ${loadTime}ms`);
-    
+
     // 监控首屏渲染时间
     const firstPaint = perfData.responseStart - perfData.navigationStart;
     console.log(`首屏渲染时间: ${firstPaint}ms`);
-    
+
     // 监控资源加载时间
     const resources = window.performance.getEntriesByType('resource');
     const resourceLoadTime = resources.reduce((total, resource) => total + resource.duration, 0);
@@ -24,7 +28,7 @@ if (typeof window !== 'undefined' && window.performance) {
 
 // 创建性能监控装饰器
 function monitorPerformance(func, funcName) {
-  return function(...args) {
+  return function (...args) {
     if (typeof window !== 'undefined' && window.performance && import.meta.env.DEV) {
       const start = performance.now();
       const result = func.apply(this, args);

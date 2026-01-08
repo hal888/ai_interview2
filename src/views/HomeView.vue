@@ -5,8 +5,8 @@
         <h1>Offer贝，面试必备</h1>
         <p>一站式解决求职者"简历差、不会说、没题练、怕面试"的四大痛点</p>
         <div class="cta-buttons">
-          <router-link to="/resume" class="btn primary-btn">开始使用</router-link>
-          <router-link to="/mock-interview" class="btn secondary-btn">模拟面试</router-link>
+          <router-link to="/resume" class="btn primary-btn" @click="trackEvent('home_cta_click', { button: 'start_now' })">开始使用</router-link>
+          <router-link to="/mock-interview" class="btn secondary-btn" @click="trackEvent('home_cta_click', { button: 'mock_interview' })">模拟面试</router-link>
         </div>
       </div>
     </header>
@@ -87,6 +87,10 @@
     </section>
   </div>
 </template>
+
+<script setup>
+import { trackEvent } from '@/utils/analytics'
+</script>
 
 <style scoped>
 .home-container {

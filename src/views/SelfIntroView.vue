@@ -172,6 +172,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import ErrorMessage from '@/components/ErrorMessage.vue'
 import apiClient from '@/utils/api.js'
+import { trackEvent } from '@/utils/analytics'
 
 const router = useRouter()
 
@@ -317,6 +318,12 @@ const generateIntro = () => {
   .then(response => {
     generatedIntro.value = response.data.intro
     estimatedTime.value = response.data.estimatedTime
+    
+    // Track generate self intro event
+    trackEvent('generate_self_intro', {
+      version: selectedVersion.value,
+      style: selectedStyle.value
+    })
     // 保存userId到localStorage，确保后续请求使用相同的userId
     if (response.data.userId) {
       localStorage.setItem('userId', response.data.userId)

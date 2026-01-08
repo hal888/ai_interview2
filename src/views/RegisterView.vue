@@ -100,6 +100,7 @@ import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import apiClient from '@/utils/api.js'
 import ErrorMessage from '@/components/ErrorMessage.vue'
+import { trackEvent } from '@/utils/analytics'
 
 const router = useRouter()
 const email = ref('')
@@ -291,6 +292,9 @@ const handleRegister = async () => {
       verificationCode: verificationCode.value
     })
     
+    // Track register event
+    trackEvent('register', { method: 'email' })
+
     // 注册成功，显示提示信息，用户点击确定后跳转到登录页面
     showErrorMessage('注册成功，请登录', () => {
       router.push('/login')

@@ -275,6 +275,7 @@ import apiClient from '@/utils/api.js'
 import ErrorMessage from '@/components/ErrorMessage.vue'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
+import { trackEvent } from '@/utils/analytics'
 
 const router = useRouter()
 
@@ -392,6 +393,12 @@ const startInterviewProcess = async () => {
     })
     
     const data = response.data
+    // Track start interview event
+    trackEvent('start_interview', {
+      style: selectedStyle.value,
+      duration: selectedDuration.value
+    })
+
     interviewId.value = data.interviewId
     isInterviewStarted.value = true
     remainingTime.value = selectedDuration.value
@@ -452,6 +459,12 @@ const endInterview = () => {
     duration: selectedDuration.value
   })
   .then(response => {
+    // Track end interview event
+    trackEvent('end_interview', {
+      interview_id: interviewId.value,
+      duration_actual: selectedDuration.value - remainingTime.value
+    })
+
     reportData.value = response.data
     showReport.value = true
     isInterviewStarted.value = false

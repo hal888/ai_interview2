@@ -203,6 +203,7 @@ import { ref, computed, onMounted, onActivated } from 'vue'
 import apiClient from '@/utils/api.js'
 import { useRouter } from 'vue-router'
 import ErrorMessage from '@/components/ErrorMessage.vue'
+import { trackEvent } from '@/utils/analytics'
 
 const router = useRouter()
 
@@ -381,6 +382,13 @@ const uploadResume = (file) => {
   apiClient.post('/resume/analyze', formData)
   .then(response => {
     resumeData.value = response.data
+    
+    // Track upload event
+    trackEvent('upload_resume', {
+      file_size: file.size,
+      file_type: file.type
+    })
+
     // 保存resumeId到localStorage
     if (response.data.resumeId) {
       localStorage.setItem('resumeId', response.data.resumeId)
